@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+model Organization {
+  id String @id @default(uuid()) @db.VarChar(36)
+  name String
+  timezone String @default("America/Denver")
+  demo Boolean @default(false)
+}
+model Shop {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  name String
+  @@index([orgId])
+}
+model Area {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  shopId String @db.VarChar(36)
+  name String
+  @@index([orgId, shopId])
+}
+model Workstation {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  areaId String @db.VarChar(36)
+  name String
+  product String @default("")
+  job String @default("")
+  target Int @default(400)
+  minIntervalMs Int @default(500)
+  @@index([orgId, areaId])
+}
+model Shift {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  name String
+  startMinute Int
+  endMinute Int
+  breaks Json
+  @@index([orgId])
+}
+model User {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  email String @unique
+  name String
+  passwordHash String
+  role String @default("viewer")
+  @@index([orgId])
+}
+model Session {
+  id String @id @db.VarChar(64)
+  userId String @db.VarChar(36)
+  csrf String @db.VarChar(64)
+  expiresAt DateTime @db.DateTime(3)
+  @@index([expiresAt])
+}
+model Device {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  name String
+  workstationId String? @db.VarChar(36)
+  capabilities Json
+  firmware String @default("unknown")
+  disabled Boolean @default(false)
+  archived Boolean @default(false)
+  lastHeartbeat DateTime? @db.DateTime(3)
+  lastEvent DateTime? @db.DateTime(3)
+  @@index([orgId])
+}
+model Credential {
+  id String @id @default(uuid()) @db.VarChar(36)
+  deviceId String @db.VarChar(36)
+  tokenHash String @unique @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  revokedAt DateTime? @db.DateTime(3)
+  @@index([deviceId])
+}
+model Assignment {
+  id String @id @default(uuid()) @db.VarChar(36)
+  deviceId String @db.VarChar(36)
+  workstationId String? @db.VarChar(36)
+  startedAt DateTime @default(now()) @db.DateTime(3)
+  endedAt DateTime? @db.DateTime(3)
+  @@index([deviceId, startedAt])
+}
+model RawEvent {
+  id BigInt @id @default(autoincrement())
+  orgId String @db.VarChar(36)
+  deviceId String @db.VarChar(36)
+  eventId String @db.VarChar(100)
+  workstationId String? @db.VarChar(36)
+  bootId String @db.VarChar(100)
+  sequence Int
+  uptimeMs BigInt
+  type String @db.VarChar(80)
+  schemaVersion Int
+  data Json
+  occurredAt DateTime? @db.DateTime(3)
+  receivedAt DateTime @default(now()) @db.DateTime(3)
+  timeQuality String
+  minIntervalMs Int
+  product String
+  job String
+  @@unique([deviceId, eventId])
+  @@index([orgId, workstationId, receivedAt])
+  @@index([deviceId, id])
+}
+model ProcessingState {
+  deviceId String @db.VarChar(36)
+  ruleVersion Int
+  activeBoot String? @db.VarChar(100)
+  lastRawId BigInt @default(0)
+  @@id([deviceId, ruleVersion])
+}
+model BootState {
+  deviceId String @db.VarChar(36)
+  ruleVersion Int
+  bootId String @db.VarChar(100)
+  sequence Int @default(-1)
+  detected Boolean?
+  lastCountUptime BigInt?
+  lastUptime BigInt @default(0)
+  @@id([deviceId, ruleVersion, bootId])
+}
+model Measurement {
+  id BigInt @id @default(autoincrement())
+  rawId BigInt
+  orgId String @db.VarChar(36)
+  workstationId String? @db.VarChar(36)
+  ruleVersion Int
+  count Int @default(0)
+  durationMs Int?
+  notice String?
+  at DateTime? @db.DateTime(3)
+  product String
+  job String
+  @@unique([rawId, ruleVersion])
+  @@index([orgId, workstationId, ruleVersion, at])
+}
+model Note {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  workstationId String @db.VarChar(36)
+  author String
+  text String @db.Text
+  reason String?
+  minutes Int?
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([orgId, workstationId, createdAt])
+}
