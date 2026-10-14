@@ -69,3 +69,4 @@ npm.cmd start
 Run Express under a process supervisor and terminate HTTPS with a same-host reverse proxy to `127.0.0.1:3001`. Set secrets in deployment environment variables. The build serves from `dist`; `tsx` remains a runtime requirement, so do not omit devDependencies with this startup command. Do not use the Compose example's local passwords in production.
 
 Read [architecture, API contracts, metric definitions and limitations](docs/ARCHITECTURE.md), and the [first physical sensor walkthrough](docs/ARDUINO.md). This repository is a local/deployable Node application; it has not been published to a hosted service.
+# shopFlow
