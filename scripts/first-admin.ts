@@ -4,8 +4,8 @@ import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
 
 export const adminInput = z.object({
-  organization: z.string().trim().min(1).max(191),
-  timezone: z.string().refine(v => DateTime.now().setZone(v).isValid, 'Enter a valid IANA timezone'),
+  organization: z.string().trim().min(1).max(191).default('CI Team'),
+  timezone: z.string().trim().refine(v => DateTime.now().setZone(v).isValid, 'Enter a valid IANA timezone').default('America/Denver'),
   name: z.string().trim().min(1).max(191),
   email: z.string().trim().toLowerCase().email().max(191),
   password: z.string().min(12).refine(v => Buffer.byteLength(v, 'utf8') <= 72, 'Password must be at most 72 UTF-8 bytes'),

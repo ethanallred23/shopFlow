@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { validateProductionEnv } from '../scripts/production-env';
-import { createFirstAdmin } from '../scripts/first-admin';
+import { adminInput, createFirstAdmin } from '../scripts/first-admin';
 import { db } from '../server/db';
 
 it('reports all missing production variables without printing credentials', () => {
@@ -12,6 +12,13 @@ it('reports all missing production variables without printing credentials', () =
   expect(() => validateProductionEnv({...env,DATABASE_URL:'mysql://:@localhost/shopflow'})).toThrow(/DATABASE_URL/);
   expect(() => validateProductionEnv({...env,APP_ORIGIN:'http://example.com'})).toThrow(/APP_ORIGIN/);
   expect(() => validateProductionEnv({...env,RUN_DB_TESTS:'1'})).toThrow(/RUN_DB_TESTS/);
+});
+
+it('defaults organization settings and accepts surrounding timezone whitespace', () => {
+  const input = {name:' Ethan Allred ', email:' admin@example.test ', password:'test-password-only'};
+  expect(adminInput.parse(input)).toMatchObject({organization:'CI Team', timezone:'America/Denver', name:'Ethan Allred', email:'admin@example.test'});
+  expect(adminInput.parse({...input,timezone:' America/Denver '})).toMatchObject({timezone:'America/Denver'});
+  expect(adminInput.safeParse({...input,timezone:'Invalid/Timezone'}).success).toBe(false);
 });
 
 // Run only on the dedicated, initially empty deployment-verification database.

@@ -38,13 +38,25 @@ try {
   if (await db.user.count({where: {role: 'admin'}})) {
     console.log('An administrator already exists; no data changed.');
   } else {
-    const organization = await question('Organization name: ');
-    const timezone = await question('IANA timezone (for example America/Denver): ');
+    const organization = process.env.ORG_NAME?.trim() || undefined;
+    const timezone = process.env.ORG_TIMEZONE?.trim() || undefined;
+    const configuration = adminInput.pick({organization: true, timezone: true}).safeParse({organization, timezone});
+    if (!configuration.success) throw new Error('Check ORG_NAME and ORG_TIMEZONE in .env: ' + configuration.error.issues.map(i => i.message).join('; '));
+    console.log(`Organization: ${configuration.data.organization}; timezone: ${configuration.data.timezone}`);
     const name = await question('Administrator name: ');
     const email = await question('Administrator email: ');
-    const password = await secret('Password (12+ characters, hidden): ');
-    const confirmation = await secret('Confirm password (hidden): ');
-    if (password !== confirmation) throw new Error('Passwords do not match.');
+    let password: string;
+    while (true) {
+      password = await secret('Password (12+ characters, hidden): ');
+      const validPassword = adminInput.shape.password.safeParse(password);
+      if (!validPassword.success) {
+        console.log(validPassword.error.issues.map(i => i.message).join('; '));
+        continue;
+      }
+      const confirmation = await secret('Confirm password (hidden): ');
+      if (password === confirmation) break;
+      console.log('Passwords did not match. Enter the password again; your name and email are kept.');
+    }
     const parsed = adminInput.safeParse({organization, timezone, name, email, password});
     if (!parsed.success) throw new Error(parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('\n'));
     const created = await createFirstAdmin(db, parsed.data);
