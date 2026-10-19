@@ -10,12 +10,24 @@ model Organization {
   name String
   timezone String @default("America/Denver")
   demo Boolean @default(false)
+  Shop_orgIdRows Shop[] @relation("Shop_orgId")
+  Area_orgIdRows Area[] @relation("Area_orgId")
+  Workstation_orgIdRows Workstation[] @relation("Workstation_orgId")
+  Shift_orgIdRows Shift[] @relation("Shift_orgId")
+  User_orgIdRows User[] @relation("User_orgId")
+  Device_orgIdRows Device[] @relation("Device_orgId")
+  RawEvent_orgIdRows RawEvent[] @relation("RawEvent_orgId")
+  DetectionMeasurement_orgIdRows DetectionMeasurement[] @relation("DetectionMeasurement_orgId")
+  Measurement_orgIdRows Measurement[] @relation("Measurement_orgId")
+  Note_orgIdRows Note[] @relation("Note_orgId")
 }
 model Shop {
   id String @id @default(uuid()) @db.VarChar(36)
   orgId String @db.VarChar(36)
   name String
   @@index([orgId])
+  orgIdRef Organization @relation("Shop_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  Area_shopIdRows Area[] @relation("Area_shopId")
 }
 model Area {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -23,6 +35,9 @@ model Area {
   shopId String @db.VarChar(36)
   name String
   @@index([orgId, shopId])
+  orgIdRef Organization @relation("Area_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  shopIdRef Shop @relation("Area_shopId", fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  Workstation_areaIdRows Workstation[] @relation("Workstation_areaId")
 }
 model Workstation {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -34,6 +49,15 @@ model Workstation {
   target Int @default(400)
   minIntervalMs Int @default(500)
   @@index([orgId, areaId])
+  orgIdRef Organization @relation("Workstation_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  areaIdRef Area @relation("Workstation_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  Device_workstationIdRows Device[] @relation("Device_workstationId")
+  Assignment_workstationIdRows Assignment[] @relation("Assignment_workstationId")
+  RawEvent_workstationIdRows RawEvent[] @relation("RawEvent_workstationId")
+  DetectionCounter_workstationIdRows DetectionCounter[] @relation("DetectionCounter_workstationId")
+  DetectionMeasurement_workstationIdRows DetectionMeasurement[] @relation("DetectionMeasurement_workstationId")
+  Measurement_workstationIdRows Measurement[] @relation("Measurement_workstationId")
+  Note_workstationIdRows Note[] @relation("Note_workstationId")
 }
 model Shift {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -43,6 +67,7 @@ model Shift {
   endMinute Int
   breaks Json
   @@index([orgId])
+  orgIdRef Organization @relation("Shift_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model User {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -52,6 +77,8 @@ model User {
   passwordHash String
   role String @default("viewer")
   @@index([orgId])
+  orgIdRef Organization @relation("User_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  Session_userIdRows Session[] @relation("Session_userId")
 }
 model Session {
   id String @id @db.VarChar(64)
@@ -59,6 +86,7 @@ model Session {
   csrf String @db.VarChar(64)
   expiresAt DateTime @db.DateTime(3)
   @@index([expiresAt])
+  userIdRef User @relation("Session_userId", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model Device {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -72,6 +100,15 @@ model Device {
   lastHeartbeat DateTime? @db.DateTime(3)
   lastEvent DateTime? @db.DateTime(3)
   @@index([orgId])
+  orgIdRef Organization @relation("Device_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("Device_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  Credential_deviceIdRows Credential[] @relation("Credential_deviceId")
+  Assignment_deviceIdRows Assignment[] @relation("Assignment_deviceId")
+  RawEvent_deviceIdRows RawEvent[] @relation("RawEvent_deviceId")
+  ProcessingState_deviceIdRows ProcessingState[] @relation("ProcessingState_deviceId")
+  DetectionCounter_deviceIdRows DetectionCounter[] @relation("DetectionCounter_deviceId")
+  DetectionMeasurement_deviceIdRows DetectionMeasurement[] @relation("DetectionMeasurement_deviceId")
+  BootState_deviceIdRows BootState[] @relation("BootState_deviceId")
 }
 model Credential {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -80,6 +117,7 @@ model Credential {
   createdAt DateTime @default(now()) @db.DateTime(3)
   revokedAt DateTime? @db.DateTime(3)
   @@index([deviceId])
+  deviceIdRef Device @relation("Credential_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model Assignment {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -88,6 +126,8 @@ model Assignment {
   startedAt DateTime @default(now()) @db.DateTime(3)
   endedAt DateTime? @db.DateTime(3)
   @@index([deviceId, startedAt])
+  deviceIdRef Device @relation("Assignment_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("Assignment_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model RawEvent {
   id BigInt @id @default(autoincrement())
@@ -110,13 +150,56 @@ model RawEvent {
   @@unique([deviceId, eventId])
   @@index([orgId, workstationId, receivedAt])
   @@index([deviceId, id])
+  orgIdRef Organization @relation("RawEvent_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  deviceIdRef Device @relation("RawEvent_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("RawEvent_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  DetectionMeasurement_rawIdRows DetectionMeasurement[] @relation("DetectionMeasurement_rawId")
+  Measurement_rawIdRows Measurement[] @relation("Measurement_rawId")
 }
 model ProcessingState {
   deviceId String @db.VarChar(36)
   ruleVersion Int
   activeBoot String? @db.VarChar(100)
+  activeCounterId String? @db.VarChar(100)
   lastRawId BigInt @default(0)
   @@id([deviceId, ruleVersion])
+  deviceIdRef Device @relation("ProcessingState_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model DetectionCounter {
+  deviceId String @db.VarChar(36)
+  ruleVersion Int
+  counterId String @db.VarChar(100)
+  bootId String @db.VarChar(100)
+  totalDetectedMs BigInt
+  detected Boolean
+  sequence Int
+  uptimeMs BigInt
+  occurredAt DateTime? @db.DateTime(3)
+  receivedAt DateTime @db.DateTime(3)
+  workstationId String? @db.VarChar(36)
+  @@id([deviceId, ruleVersion, counterId])
+  deviceIdRef Device @relation("DetectionCounter_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("DetectionCounter_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model DetectionMeasurement {
+  id BigInt @id @default(autoincrement())
+  rawId BigInt
+  deviceId String @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  workstationId String? @db.VarChar(36)
+  ruleVersion Int
+  deltaMs BigInt
+  accepted Boolean
+  notice String?
+  intervalStart DateTime? @db.DateTime(3)
+  intervalEnd DateTime? @db.DateTime(3)
+  @@unique([rawId, ruleVersion])
+  @@index([orgId, deviceId, ruleVersion])
+  @@index([orgId, workstationId, ruleVersion, intervalEnd])
+  orgIdRef Organization @relation("DetectionMeasurement_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  deviceIdRef Device @relation("DetectionMeasurement_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("DetectionMeasurement_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rawIdRef RawEvent @relation("DetectionMeasurement_rawId", fields: [rawId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model BootState {
   deviceId String @db.VarChar(36)
@@ -127,6 +210,7 @@ model BootState {
   lastCountUptime BigInt?
   lastUptime BigInt @default(0)
   @@id([deviceId, ruleVersion, bootId])
+  deviceIdRef Device @relation("BootState_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model Measurement {
   id BigInt @id @default(autoincrement())
@@ -142,6 +226,9 @@ model Measurement {
   job String
   @@unique([rawId, ruleVersion])
   @@index([orgId, workstationId, ruleVersion, at])
+  orgIdRef Organization @relation("Measurement_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("Measurement_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rawIdRef RawEvent @relation("Measurement_rawId", fields: [rawId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model Note {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -153,4 +240,11 @@ model Note {
   minutes Int?
   createdAt DateTime @default(now()) @db.DateTime(3)
   @@index([orgId, workstationId, createdAt])
+  orgIdRef Organization @relation("Note_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation @relation("Note_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+model BootstrapState {
+  id String @id @db.VarChar(32)
+  completed Boolean @default(false)
 }

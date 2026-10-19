@@ -1,0 +1,32 @@
+-- Preserve existing data. Orphans cause failure and require operator review.
+CREATE TABLE `BootstrapState` (`id` VARCHAR(32) NOT NULL, `completed` BOOLEAN NOT NULL DEFAULT false, PRIMARY KEY (`id`)) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE `Shop` ADD CONSTRAINT `Shop_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Area` ADD CONSTRAINT `Area_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Area` ADD CONSTRAINT `Area_shopId_fkey` FOREIGN KEY (`shopId`) REFERENCES `Shop`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Workstation` ADD CONSTRAINT `Workstation_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Workstation` ADD CONSTRAINT `Workstation_areaId_fkey` FOREIGN KEY (`areaId`) REFERENCES `Area`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Shift` ADD CONSTRAINT `Shift_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `User` ADD CONSTRAINT `User_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Session` ADD CONSTRAINT `Session_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Device` ADD CONSTRAINT `Device_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Device` ADD CONSTRAINT `Device_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Credential` ADD CONSTRAINT `Credential_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Assignment` ADD CONSTRAINT `Assignment_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Assignment` ADD CONSTRAINT `Assignment_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `RawEvent` ADD CONSTRAINT `RawEvent_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `RawEvent` ADD CONSTRAINT `RawEvent_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `RawEvent` ADD CONSTRAINT `RawEvent_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ProcessingState` ADD CONSTRAINT `ProcessingState_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionCounter` ADD CONSTRAINT `DetectionCounter_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionCounter` ADD CONSTRAINT `DetectionCounter_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionMeasurement` ADD CONSTRAINT `DetectionMeasurement_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionMeasurement` ADD CONSTRAINT `DetectionMeasurement_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionMeasurement` ADD CONSTRAINT `DetectionMeasurement_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `DetectionMeasurement` ADD CONSTRAINT `DetectionMeasurement_rawId_fkey` FOREIGN KEY (`rawId`) REFERENCES `RawEvent`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `BootState` ADD CONSTRAINT `BootState_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `Device`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Measurement` ADD CONSTRAINT `Measurement_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Measurement` ADD CONSTRAINT `Measurement_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Measurement` ADD CONSTRAINT `Measurement_rawId_fkey` FOREIGN KEY (`rawId`) REFERENCES `RawEvent`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Note` ADD CONSTRAINT `Note_orgId_fkey` FOREIGN KEY (`orgId`) REFERENCES `Organization`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `Note` ADD CONSTRAINT `Note_workstationId_fkey` FOREIGN KEY (`workstationId`) REFERENCES `Workstation`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -12,6 +12,7 @@ try{
  await expect(page.getByText('Workstation pulse')).toBeVisible();
  await page.screenshot({path:'.local/overview-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'Devices',exact:true}).click();await page.getByRole('button',{name:'Register device',exact:true}).click();
+ await page.getByLabel('Measurement mode').selectOption('production');
  const name='Smoke sensor '+Date.now();await page.getByLabel('Device name').fill(name);await page.getByRole('button',{name:'Save changes',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Save your device credential'})).toBeVisible();
  const codes=await page.locator('.dialog code').allTextContents();const [deviceId,token]=codes;

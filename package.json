@@ -10,11 +10,14 @@
     "test": "vitest run",
     "test:integration": "vitest run tests/integration.test.ts",
     "db:migrate": "prisma migrate deploy",
+    "db:check": "tsx scripts/check-db.ts",
     "db:seed": "tsx prisma/seed.ts",
     "rebuild": "tsx server/rebuild.ts",
     "simulate": "tsx scripts/simulator.ts",
-    "db:setup": "tsx scripts/setup.ts",
-    "test:browser": "tsx scripts/browser-smoke.ts"
+    "db:setup": "tsx scripts/create-admin.ts",
+    "test:browser": "tsx scripts/browser-smoke.ts",
+    "setup:production": "tsx scripts/setup-production.ts",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

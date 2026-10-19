@@ -3,8 +3,12 @@ import {DateTime} from 'luxon';
 const base = z.object({schemaVersion:z.literal(1),eventId:z.string().min(1).max(100),deviceId:z.string().uuid(),bootId:z.string().min(1).max(100),sequence:z.number().int().min(0).max(2147483647),uptimeMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),occurredAt:z.string().datetime().nullable(),delivery:z.enum(['live','buffered','unknown']).default('unknown')}).strict();
 export const eventSchema=z.discriminatedUnion('type',[
   base.extend({type:z.literal('sensor.state_changed'),data:z.object({detected:z.boolean()}).strict()}),
-  base.extend({type:z.literal('cycle.completed'),data:z.object({durationMs:z.number().int().min(1).max(86400000)}).strict()})
-]);
+  base.extend({type:z.literal('cycle.completed'),data:z.object({durationMs:z.number().int().min(1).max(86400000)}).strict()}),
+  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100)}).strict()})
+]).superRefine((event,ctx)=>{
+  if(event.type==='sensor.detection_time_snapshot' && event.data.totalDetectedMs>event.uptimeMs)
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','totalDetectedMs'],message:'Detected time cannot exceed uptime; this counter resets on boot'});
+});
 export type Envelope=z.infer<typeof eventSchema>;
 export interface State {sequence:number;detected:boolean|null;lastCountUptime:number|null;lastUptime:number}
 export function transition(state:State|undefined,e:Envelope,minInterval:number,retired=false){

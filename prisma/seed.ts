@@ -4,6 +4,7 @@ import {DateTime} from 'luxon';
 import {db} from '../server/db';
 import {hash,ingest,newToken} from '../server/ingestion';
 async function seed(){
+ if(process.env.NODE_ENV==='production')throw new Error('Demo seeding is disabled in production. Use setup:production and admin:create.');
  const email=process.env.SEED_EMAIL;const password=process.env.SEED_PASSWORD;
  if(!email||!password||password.length<12)throw new Error('Set SEED_EMAIL and SEED_PASSWORD (at least 12 characters).');
  if(await db.user.findUnique({where:{email}})){console.log('Seed account already exists; no data changed.');return;}

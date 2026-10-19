@@ -2,6 +2,7 @@ import {DateTime} from 'luxon';
 import {db} from './db';
 import {HttpError,RULE_VERSION} from './ingestion';
 import {dailySchedule,percentile,shiftWindow} from './domain';
+import {detectionDashboard} from './detection-dashboard';
 export async function dashboard(orgId:string,query:Record<string,any>){
   const org=await db.organization.findUniqueOrThrow({where:{id:orgId}});
   const [shops,areas,stations,shifts,devices]=await Promise.all([db.shop.findMany({where:{orgId}}),db.area.findMany({where:{orgId}}),db.workstation.findMany({where:{orgId}}),db.shift.findMany({where:{orgId}}),db.device.findMany({where:{orgId,archived:false}})]);
@@ -28,11 +29,12 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   const unplaced=await db.measurement.aggregate({where:{orgId,ruleVersion:RULE_VERSION,workstationId:{in:ids},at:null},_sum:{count:true}});
   const recent=await db.measurement.findMany({where:{orgId,ruleVersion:RULE_VERSION,workstationId:{in:ids}},orderBy:{id:'desc'},take:20});
   const deviceStatus=(d:typeof devices[number])=>d.disabled?'disabled':!d.lastHeartbeat?'never connected':Date.now()-d.lastHeartbeat.getTime()<90000?'online':'offline';
-  const rows=filtered.map(s=>{
+  const rows=await Promise.all(filtered.map(async s=>{
     const group=grouped.find(g=>g.workstationId===s.id);const ds=devices.filter(d=>d.workstationId===s.id);
     const durations=cycleRows.filter(c=>c.workstationId===s.id).map(c=>c.durationMs!);
     const count=group?group._sum.count??0:null;
-    return {...s,target:daily?Math.round(s.target*daily.targetFactor):s.target,count,expected:daily?Math.floor(s.target*daily.expectedFactor):window.workingMs?Math.floor(s.target*window.elapsedMs/window.workingMs):null,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
-  });
+    const timers=await detectionDashboard(orgId,ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end);
+    return {...s,timerOnly:timers.length>0&&ds.every(d=>(d.capabilities as string[]).includes('detection_time')),timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!)})),target:daily?Math.round(s.target*daily.targetFactor):s.target,count,expected:daily?Math.floor(s.target*daily.expectedFactor):window.workingMs?Math.floor(s.target*window.elapsedMs/window.workingMs):null,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
+  }));
   return {org,shops,areas,shifts,date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
 }

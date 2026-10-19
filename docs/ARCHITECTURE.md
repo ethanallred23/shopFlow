@@ -1,5 +1,7 @@
 # ShopFlow architecture and operations
 
+Detection time now uses a separate `sensor.detection_time_snapshot` event, exclusive `detection_time` capability, durable counter high-water marks and idempotent delta measurements. See [DETECTION_TIME.md](DETECTION_TIME.md) for timer/reset/replay semantics and [LAN_HTTPS.md](LAN_HTTPS.md) for the private device-only proxy and public root CA.
+
 One Express/TypeScript application serves authenticated JSON APIs, device ingestion, SSE and the built React application. Vite proxies `/api` during development. Prisma uses MySQL 8/InnoDB. No Redis, MQTT or microservices are required.
 
 ## Event and processing contract

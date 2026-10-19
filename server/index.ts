@@ -30,7 +30,7 @@ app.post('/api/login',rateLimit({windowMs:900000,limit:20}),asyncRoute(async(req
   res.cookie('sf_session',token,cookie).json({ok:true});
 }));
 const bearer=(req:express.Request)=>{const value=req.headers.authorization;if(!value?.startsWith('Bearer ')||value.length>200)throw new HttpError(401,'Device token required');return value.slice(7);};
-app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);updates.emit(result.orgId);res.json({ok:true,duplicate:result.duplicate});}));
+app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);updates.emit(result.orgId);const {orgId,...ack}=result;res.json(ack);}));
 app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
   const body=z.object({deviceId:z.string().uuid(),firmware:z.string().max(100).optional()}).strict().parse(req.body);
   const orgId=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});return d.orgId;});
@@ -48,7 +48,7 @@ app.get('/api/live',asyncRoute(async(req,res)=>{
   req.on('close',()=>{updates.off(req.auth!.orgId,send);clearInterval(interval);clearTimeout(expiry);});
 }));
 app.post('/api/devices',role('admin'),asyncRoute(async(req,res)=>{
-  const data=z.object({name:z.string().min(1).max(100),capabilities:z.array(z.enum(['count','cycle'])).min(1)}).parse(req.body);
+  const data=z.object({name:z.string().min(1).max(100),capabilities:z.array(z.enum(['count','cycle','detection_time'])).min(1).refine(c=>!c.includes('detection_time')||c.length===1,'Detection time must be timer-only')}).parse(req.body);
   const token=newToken();const device=await db.$transaction(async tx=>{const d=await tx.device.create({data:{...data,orgId:req.auth!.orgId}});await tx.credential.create({data:{deviceId:d.id,tokenHash:hash(token)}});return d;});
   res.status(201).json({device,token});
 }));

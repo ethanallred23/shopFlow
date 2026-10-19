@@ -12,13 +12,13 @@ suite('MySQL transactions and authenticated API',()=>{
  beforeAll(async()=>{
   app=(await import('../server/index')).app;
   orgId=(await db.organization.create({data:{name:'Integration test'}})).id;otherOrg=(await db.organization.create({data:{name:'Other tenant'}})).id;
-  stationId=(await db.workstation.create({data:{orgId,areaId:randomUUID(),name:'Test station'}})).id;
+  stationId=(await db.workstation.create({data:{orgId,areaId:(await db.area.create({data:{orgId,name:'Test area',shopId:(await db.shop.create({data:{orgId,name:'Test shop'}})).id}})).id,name:'Test station'}})).id;
   deviceId=(await db.device.create({data:{orgId,name:'Test sensor',workstationId:stationId,capabilities:['count','cycle']}})).id;
   token=newToken();await db.credential.create({data:{deviceId,tokenHash:hash(token)}});
   for(const role of ['viewer','admin','owner']){const u=await db.user.create({data:{orgId:role==='admin'?otherOrg:orgId,email:randomUUID()+'@test.local',name:role,role:role==='owner'?'admin':role,passwordHash:'unused'}});const st=newToken();await db.session.create({data:{id:hash(st),csrf:'test-csrf',userId:u.id,expiresAt:new Date(Date.now()+3600000)}});if(role==='viewer')viewer=st;else if(role==='owner')owner=st;else admin=st;}
  });
  afterAll(async()=>{
-  if(orgId){const users=await db.user.findMany({where:{orgId:{in:[orgId,otherOrg]}}});await db.session.deleteMany({where:{userId:{in:users.map(u=>u.id)}}});await db.user.deleteMany({where:{orgId:{in:[orgId,otherOrg]}}});await db.credential.deleteMany({where:{deviceId}});await db.bootState.deleteMany({where:{deviceId}});await db.processingState.deleteMany({where:{deviceId}});await db.measurement.deleteMany({where:{orgId}});await db.rawEvent.deleteMany({where:{orgId}});await db.device.deleteMany({where:{orgId}});await db.workstation.deleteMany({where:{orgId}});await db.organization.deleteMany({where:{id:{in:[orgId,otherOrg]}}});}await db.$disconnect();
+  if(orgId){const users=await db.user.findMany({where:{orgId:{in:[orgId,otherOrg]}}});await db.session.deleteMany({where:{userId:{in:users.map(u=>u.id)}}});await db.user.deleteMany({where:{orgId:{in:[orgId,otherOrg]}}});await db.credential.deleteMany({where:{deviceId}});await db.bootState.deleteMany({where:{deviceId}});await db.processingState.deleteMany({where:{deviceId}});await db.measurement.deleteMany({where:{orgId}});await db.rawEvent.deleteMany({where:{orgId}});await db.device.deleteMany({where:{orgId}});await db.workstation.deleteMany({where:{orgId}});await db.area.deleteMany({where:{orgId}});await db.shop.deleteMany({where:{orgId}});await db.organization.deleteMany({where:{id:{in:[orgId,otherOrg]}}});}await db.$disconnect();
  });
  it('commits concurrent retries once and preserves repeat/out-of-order behavior',async()=>{
   await ingest(token,envelope(0,false));const high=envelope(1,true);const results=await Promise.all(Array.from({length:8},()=>ingest(token,high)));expect(results.filter(r=>!r.duplicate)).toHaveLength(1);

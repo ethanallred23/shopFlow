@@ -4,11 +4,11 @@ services:
     command: ["--default-time-zone=+00:00"]
     environment:
       MYSQL_DATABASE: shopflow
-      MYSQL_USER: shopflow
-      MYSQL_PASSWORD: local-only-password
-      MYSQL_ROOT_PASSWORD: local-root-only
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER to a non-root database username}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set a nonempty MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set a nonempty MYSQL_ROOT_PASSWORD}
       TZ: UTC
-    ports: ["127.0.0.1:3306:3306"]
+    ports: ["127.0.0.1:3307:3306"]
     volumes: ["mysql-data:/var/lib/mysql"]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]

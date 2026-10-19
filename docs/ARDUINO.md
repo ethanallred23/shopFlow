@@ -1,5 +1,7 @@
 # Connect the first physical sensor
 
+**For the cumulative timer use [DETECTION_TIME.md](DETECTION_TIME.md) and [LAN_HTTPS.md](LAN_HTTPS.md). The sketch below is the legacy counting example; timer-only credentials reject its state-change events. It does not implement the TM1637 timer.**
+
 1. Start ShopFlow and sign in as an administrator. In Settings, create your shop, area and workstation. Configure the count interval and shift target in workstation detail.
 2. In Devices, register a sensor, save its one-time token, and assign its workstation. Moving it later preserves ingestion-time assignment on historical events.
 3. Install **Arduino ESP32 Boards**, select **Arduino Nano ESP32**, and select **Tools → Pin Numbering → By Arduino pin**. This example targets the Arduino ESP32 2.x API family. No Arduino core/toolchain was installed in the implementation environment, so the sketch has not been compiled or hardware-tested there. Verify against your installed board-package version before deployment.

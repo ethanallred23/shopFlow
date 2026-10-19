@@ -1,5 +1,7 @@
 # Nano ESP32 → ShopFlow: implemented integration handoff
 
+**Historical handoff — superseded. Detection time and LAN HTTPS have since been implemented. Use [DETECTION_TIME.md](DETECTION_TIME.md) for the accepted timer contract and [LAN_HTTPS.md](LAN_HTTPS.md) for the running proxy/public CA. The limitations below describe the earlier implementation.**
+
 Verified 2026-10-14. Hardware reported working: D5 HIGH means detected, LOW absent; D4 follows detection; TM1637 CLK D2/DIO D3 at 3.3 V. The hardware timer accumulates only while detected, pauses when absent, and resumes without clearing. The repository sketch does **not** implement the TM1637 or this accumulated-time measurement; retain the working firmware's sampling/display logic.
 
 ## Connectivity — not ready for physical connection yet

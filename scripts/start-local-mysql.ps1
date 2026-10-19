@@ -13,4 +13,4 @@ if (Get-NetTCPConnection -LocalPort 3307 -State Listen -ErrorAction SilentlyCont
 }
 $mysqlArgs = @('--no-defaults', ('--basedir="' + $mysqlBase + '"'), ('--datadir="' + $mysqlData + '"'), '--port=3307', '--bind-address=127.0.0.1', '--mysqlx=0', '--default-time-zone=+00:00', '--console')
 Start-Process -FilePath $mysqlExe -ArgumentList $mysqlArgs -WindowStyle Hidden -RedirectStandardOutput (Join-Path $projectRoot '.local/mysql-stdout.log') -RedirectStandardError (Join-Path $projectRoot '.local/mysql-stderr.log') | Out-Null
-Write-Output 'Portable MySQL starting on 127.0.0.1:3307. Credentials remain in .env.'
+Write-Output 'Portable MySQL starting on 127.0.0.1:3307. Set DATABASE_URL credentials in .env before connecting.'

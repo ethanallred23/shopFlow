@@ -1,5 +1,17 @@
 # Validation evidence
 
+## Detection-time / LAN HTTPS update (2026-10-14)
+
+- Third MySQL migration applied to demo and disposable test databases; Prisma client regenerated.
+- **27 tests passed**, including timer snapshots, concurrent distinct events/retries, gaps, invalid changes, reset/reuse, replay, shifts, assignment changes and clock corrections.
+- Final TypeScript check and Vite production build passed. Vite retains a non-blocking large chart-chunk warning.
+- Real HTTPS ingress at `https://192.168.10.36:443` validated the custom root and IP SAN from this Windows host. Untrusted TLS failed; missing bearer token returned 401; timer-only part events returned 422.
+- Browser showed 13,500 ms recovered, 1,500 ms current counter, 10,000 ms confirmed shift time, 3,500 ms unallocated, Absent state with online heartbeat, and no production metrics. Temporary credentials were revoked/device disabled.
+- Backend remains bound to loopback. Proxy binds only the private LAN IP. CA private-key ACLs were verified as current user and SYSTEM only. No system trust-store or corporate network controls changed.
+- Second-device/Arduino connectivity and an IT-approved DHCP reservation remain unverified. Windows curl/Schannel failed private-CA revocation checking; Node/OpenSSL HTTPS validation and authenticated requests passed with verification enabled. See [LAN_HTTPS.md](LAN_HTTPS.md).
+
+The earlier baseline evidence follows.
+
 Validated on Windows with Node.js 22.14.0 and an official portable MySQL 8.0.45 instance bound to loopback, stored under ignored `.local/`.
 
 - Two committed Prisma migrations applied successfully to both demo and disposable test databases.
@@ -29,3 +41,13 @@ powershell -ExecutionPolicy Bypass -File scripts/stop-local-mysql.ps1
 ```
 
 These helpers only apply to this initialized workspace. Fresh clones should use the README's Docker/MySQL startup commands. The portable package, database files, screenshots, cache and secrets live in ignored `.local/`; none are required in the repository.
+# Production setup verification — 2026-10-14
+
+- Created a separate empty local MySQL 8.0.45 database for deployment verification; did not migrate or modify the existing `shopflow` database.
+- Ran the production setup workflow twice. First pass applied all four committed migrations, generated Prisma, type-checked, built and seeded only the bootstrap marker. Second pass reported no pending migrations and did not duplicate the marker.
+- Verified 19 database tables (including Prisma migration history), 29 foreign keys, and restrictive deletion/orphan rejection.
+- All 29 tests passed with database integration enabled, including concurrent first-admin creation, bcrypt verification, reruns preserving the original password, and no demo shops/events.
+- Reseeded essential configuration after admin creation: one completed bootstrap marker and one administrator remained.
+- Current local development configuration fails production validation with clear field names. A deliberately unreachable database produced a nonzero exit and skipped build/seeding. Final TypeScript check passed.
+- Build reported a non-blocking chart chunk size warning. No production server was deployed and no production credentials were supplied. The existing local `.env` database credentials remain blank.
+

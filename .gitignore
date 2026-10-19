@@ -4,3 +4,6 @@ dist/
 coverage/
 *.log
 .local/
+*.key
+*.pfx
+*.p12

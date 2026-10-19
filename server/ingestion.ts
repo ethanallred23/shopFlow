@@ -2,6 +2,7 @@ import {Prisma,RawEvent} from '@prisma/client';
 import {createHash,randomBytes} from 'node:crypto';
 import {db} from './db';
 import {eventSchema,Envelope,transition} from './domain';
+import {processDetection} from './detection';
 export const RULE_VERSION=1;
 export const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 export const newToken=()=>randomBytes(32).toString('base64url');
@@ -23,6 +24,7 @@ export async function processRaw(tx:Prisma.TransactionClient,raw:RawEvent,versio
   const boot=await tx.bootState.findUnique({where:{deviceId_ruleVersion_bootId:bootKey}});
   const retired=!!boot && state.activeBoot!==raw.bootId;
   const e={schemaVersion:raw.schemaVersion,eventId:raw.eventId,deviceId:raw.deviceId,bootId:raw.bootId,sequence:raw.sequence,uptimeMs:Number(raw.uptimeMs),type:raw.type,data:raw.data,occurredAt:raw.occurredAt?.toISOString()??null} as Envelope;
+  if(e.type==='sensor.detection_time_snapshot'){await processDetection(tx,raw,state,e);return;}
   const result=transition(boot?{sequence:boot.sequence,detected:boot.detected,lastCountUptime:boot.lastCountUptime===null?null:Number(boot.lastCountUptime),lastUptime:Number(boot.lastUptime)}:undefined,e,raw.minIntervalMs,retired);
   if(!retired){
     const values={sequence:result.next.sequence,detected:result.next.detected,lastCountUptime:result.next.lastCountUptime===null?null:BigInt(result.next.lastCountUptime),lastUptime:BigInt(result.next.lastUptime)};
@@ -37,15 +39,20 @@ export async function ingest(token:string,input:unknown){
     const d=await authorizeDevice(tx,token);
     if(d.id!==e.deviceId)throw new HttpError(403,'deviceId does not match credential');
     const existing=await tx.rawEvent.findUnique({where:{deviceId_eventId:{deviceId:d.id,eventId:e.eventId}}});
-    if(existing)return {ok:true,duplicate:true,orgId:d.orgId};
+    if(existing){
+      const outcome=e.type==='sensor.detection_time_snapshot'?await tx.detectionMeasurement.findUnique({where:{rawId_ruleVersion:{rawId:existing.id,ruleVersion:RULE_VERSION}}}):null;
+      return {ok:true,duplicate:true,orgId:d.orgId,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
+    }
     const caps=d.capabilities as string[];
-    if(!caps.includes(e.type==='cycle.completed'?'cycle':'count'))throw new HttpError(422,'Device does not support this event');
+    const capability=e.type==='sensor.detection_time_snapshot'?'detection_time':e.type==='cycle.completed'?'cycle':'count';
+    if(!caps.includes(capability))throw new HttpError(422,'Device does not support this event');
     const station=d.workstationId?await tx.workstation.findUnique({where:{id:d.workstationId}}):null;
     const receivedAt=new Date();const occurredAt=e.occurredAt?new Date(e.occurredAt):null;
     if(occurredAt && occurredAt.getTime()>receivedAt.getTime()+300000)throw new HttpError(422,'Device timestamp is too far in the future');
     const raw=await tx.rawEvent.create({data:{orgId:d.orgId,deviceId:d.id,eventId:e.eventId,bootId:e.bootId,sequence:e.sequence,uptimeMs:BigInt(e.uptimeMs),type:e.type,schemaVersion:e.schemaVersion,data:e.data,occurredAt,receivedAt,timeQuality:occurredAt?'device_clock':e.delivery==='live'?'receipt_estimate':'unknown',workstationId:d.workstationId,minIntervalMs:station?.minIntervalMs??500,product:station?.product??'',job:station?.job??''}});
     await processRaw(tx,raw);
     await tx.device.update({where:{id:d.id},data:{lastEvent:receivedAt}});
-    return {ok:true,duplicate:false,orgId:d.orgId};
+    const outcome=e.type==='sensor.detection_time_snapshot'?await tx.detectionMeasurement.findUnique({where:{rawId_ruleVersion:{rawId:raw.id,ruleVersion:RULE_VERSION}}}):null;
+    return {ok:true,duplicate:false,orgId:d.orgId,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
   },{isolationLevel:Prisma.TransactionIsolationLevel.ReadCommitted,maxWait:10000,timeout:10000});
 }
