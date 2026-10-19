@@ -109,6 +109,7 @@ model Device {
   DetectionCounter_deviceIdRows DetectionCounter[] @relation("DetectionCounter_deviceId")
   DetectionMeasurement_deviceIdRows DetectionMeasurement[] @relation("DetectionMeasurement_deviceId")
   BootState_deviceIdRows BootState[] @relation("BootState_deviceId")
+  DeviceCommand_deviceIdRows DeviceCommand[] @relation("DeviceCommand_deviceId")
 }
 model Credential {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -247,4 +248,21 @@ model Note {
 model BootstrapState {
   id String @id @db.VarChar(32)
   completed Boolean @default(false)
+}
+
+model DeviceCommand {
+  id String @id @default(uuid()) @db.VarChar(36)
+  deviceId String @db.VarChar(36)
+  type String @db.VarChar(40)
+  payload Json
+  status String @default("pending") @db.VarChar(20)
+  createdBy String @db.VarChar(191)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  expiresAt DateTime @db.DateTime(3)
+  acknowledgedAt DateTime? @db.DateTime(3)
+  result Json?
+  error String? @db.VarChar(500)
+  @@index([deviceId, status, createdAt])
+  @@index([expiresAt])
+  deviceIdRef Device @relation("DeviceCommand_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }

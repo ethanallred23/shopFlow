@@ -36,6 +36,18 @@ app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
   const orgId=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});return d.orgId;});
   updates.emit(orgId);res.json({ok:true});
 }));
+app.get('/api/v1/commands',asyncRoute(async(req,res)=>{
+  const commands=await db.$transaction(async tx=>{
+    const d=await authorizeDevice(tx,bearer(req));
+    return tx.deviceCommand.findMany({where:{deviceId:d.id,status:'pending',expiresAt:{gt:new Date()}},orderBy:{createdAt:'asc'},take:10,select:{id:true,type:true,payload:true,createdAt:true,expiresAt:true}});
+  });
+  res.json({commands});
+}));
+app.post('/api/v1/commands/:id/ack',asyncRoute(async(req,res)=>{
+  const body=z.object({status:z.enum(['applied','rejected']),result:z.record(z.unknown()).optional(),error:z.string().max(500).optional()}).strict().parse(req.body);
+  const updated=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));return tx.deviceCommand.updateMany({where:{id:req.params.id,deviceId:d.id,status:'pending'},data:{status:body.status,acknowledgedAt:new Date(),result:body.result as any,error:body.error}});});
+  res.json({ok:true,duplicate:updated.count===0});
+}));
 app.use('/api',auth);
 app.get('/api/me',(req,res)=>res.json({user:{id:req.auth!.id,name:req.auth!.name,email:req.auth!.email,role:req.auth!.role},csrf:req.csrf}));
 app.post('/api/logout',asyncRoute(async(req,res)=>{await db.session.delete({where:{id:req.sessionId}});res.clearCookie('sf_session',{path:'/'}).json({ok:true});}));
@@ -63,6 +75,14 @@ app.post('/api/devices/:id/credentials',role('admin'),asyncRoute(async(req,res)=
   const {action}=z.object({action:z.enum(['rotate','revoke'])}).parse(req.body);await owned('device',req.params.id,req.auth!.orgId);const token=action==='rotate'?newToken():null;
   await db.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM Device WHERE id=${req.params.id} FOR UPDATE`;await tx.credential.updateMany({where:{deviceId:req.params.id,revokedAt:null},data:{revokedAt:new Date()}});if(token)await tx.credential.create({data:{deviceId:req.params.id,tokenHash:hash(token)}});});res.json({token});
 }));
+app.post('/api/devices/:id/commands',role('supervisor'),asyncRoute(async(req,res)=>{
+  const body=z.object({type:z.enum(['pause','resume','reset','set_total_detected_ms']),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional()}).strict().refine(v=>v.type!=='set_total_detected_ms'||v.totalDetectedMs!==undefined,'totalDetectedMs is required for set_total_detected_ms').parse(req.body);
+  const device=await owned('device',req.params.id,req.auth!.orgId);
+  if(!(device.capabilities as string[]).includes('detection_time'))throw new HttpError(422,'Device does not support timer controls');
+  const command=await db.deviceCommand.create({data:{deviceId:device.id,type:body.type,payload:body.type==='set_total_detected_ms'?{totalDetectedMs:body.totalDetectedMs}: {},createdBy:req.auth!.email,expiresAt:new Date(Date.now()+24*3600000)}});
+  res.status(201).json({id:command.id,type:command.type,status:command.status,expiresAt:command.expiresAt});
+}));
+app.get('/api/devices/:id/commands',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.deviceCommand.findMany({where:{deviceId:req.params.id},orderBy:{createdAt:'desc'},take:50}));}));
 app.get('/api/devices/:id/events',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);const cursor=z.string().regex(/^\d+$/).optional().parse(req.query.cursor);res.json(await db.rawEvent.findMany({where:{deviceId:req.params.id,orgId:req.auth!.orgId,...(cursor?{id:{lt:BigInt(cursor)}}:{})},orderBy:{id:'desc'},take:50}));}));
 app.get('/api/devices/:id/assignments',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.assignment.findMany({where:{deviceId:req.params.id},orderBy:{startedAt:'desc'},take:100}));}));
 app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),target:z.number().int().min(0).max(10000000).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
