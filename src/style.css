@@ -12,3 +12,5 @@
 .login-brand{margin-bottom:65px}.login .login-brand .logo{margin-bottom:12px}.login-brand .ci-brand{margin-top:0;color:#afcbc9;font-size:13px}.login-brand .ci-brand svg{color:#70bca9}.login-brand .ci-brand strong{color:#e8f4f1}@media(max-width:600px){.login-brand{margin-bottom:30px}.login .login-brand .logo{margin-bottom:10px}}
 
 .detection-panel h2,.timer-state{display:flex;align-items:center;gap:9px}.timer-device{padding-top:18px}.timer-state{flex-wrap:wrap;color:#247c6c;font-size:13px}.timer-state span{color:#7b8e96;font-size:11px}.timer-device>.metrics{margin-top:18px}.timer-device .metric-value{font-size:26px}.timer-controls{border-top:1px solid #e5ebed;margin-top:18px;padding-top:16px}.timer-controls>div{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.timer-controls label{display:flex;align-items:center;gap:6px;font-size:12px;color:#73838b}.timer-controls input{width:130px}.timer-controls button{padding:7px 11px}
+
+.timer-controls button:disabled{cursor:not-allowed}
