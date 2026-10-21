@@ -4,10 +4,10 @@ const base = z.object({schemaVersion:z.literal(1),eventId:z.string().min(1).max(
 export const eventSchema=z.discriminatedUnion('type',[
   base.extend({type:z.literal('sensor.state_changed'),data:z.object({detected:z.boolean()}).strict()}),
   base.extend({type:z.literal('cycle.completed'),data:z.object({durationMs:z.number().int().min(1).max(86400000)}).strict()}),
-  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100)}).strict()})
+  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100),calibration:z.object({commandId:z.string().uuid(),offsetMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict().optional()}).strict()})
 ]).superRefine((event,ctx)=>{
-  if(event.type==='sensor.detection_time_snapshot' && event.data.totalDetectedMs>event.uptimeMs)
-    ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','totalDetectedMs'],message:'Detected time cannot exceed uptime; this counter resets on boot'});
+  if(event.type==='sensor.detection_time_snapshot' && (event.data.totalDetectedMs-(event.data.calibration?.offsetMs??0)>event.uptimeMs || event.data.totalDetectedMs<(event.data.calibration?.offsetMs??0)))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','totalDetectedMs'],message:'Measured time above calibration cannot exceed uptime or be negative'});
 });
 export type Envelope=z.infer<typeof eventSchema>;
 export interface State {sequence:number;detected:boolean|null;lastCountUptime:number|null;lastUptime:number}
