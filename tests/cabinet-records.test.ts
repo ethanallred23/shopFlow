@@ -50,3 +50,9 @@ it('validates cabinet metadata while allowing older firmware',()=>{
  }
  const {cabinet,...legacy}=row.data;expect(eventSchema.safeParse({...event,data:legacy}).success).toBe(true);
 });
+
+it('fills missing cabinet wall times when NTP becomes available after completion',()=>{
+ const unknown=sample(1,1000,'a',1000,900);unknown.occurredAt=null;
+ const known=sample(2,1500,'a',1000,900);
+ expect(cabinetRecords([unknown,known],start,end)[0]).toMatchObject({startedAt:new Date(origin+100).toISOString(),finishedAt:new Date(origin+1000).toISOString()});
+});

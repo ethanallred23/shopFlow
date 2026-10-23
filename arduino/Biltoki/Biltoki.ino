@@ -24,7 +24,13 @@ const int ERROR_LED_PIN = D7;  // Red LED: its own 220 ohm resistor, cathode -> 
 const int BUZZER_PIN = D9;     // Active buzzer: pin -> 220 ohm -> positive; negative -> GND.
 
 // Network task publishes flags; only the hardware loop drives the status LEDs.
-std::atomic<bool> networkError{false};
+enum ErrorFlag : uint32_t {
+  CONFIG_ERROR = 1 << 0, WIFI_ERROR = 1 << 1, CLOCK_ERROR = 1 << 2,
+  HEARTBEAT_ERROR = 1 << 3, ACK_ERROR = 1 << 4, POLL_ERROR = 1 << 5,
+  EVENT_ERROR = 1 << 6, MALFORMED_COMMAND_ERROR = 1 << 7,
+  HARDWARE_ERROR = 1 << 8, QUEUE_ERROR = 1 << 9, COMMAND_ERROR = 1 << 10
+};
+std::atomic<uint32_t> networkErrors{0};
 bool hardwareError = false;
 bool queueError = false;
 std::atomic<bool> commandError{false};
@@ -37,7 +43,8 @@ constexpr size_t HTTP_BODY_LIMIT = 16384;
 constexpr uint32_t SNAPSHOT_INTERVAL = 5000;
 constexpr uint32_t POLL_INTERVAL = 3000;
 constexpr uint32_t SCAN_DEBOUNCE_MS = 100;
-constexpr uint32_t BUZZER_BEEP_MS = 150;
+constexpr uint32_t BUZZER_BEEP_MS = 350;
+constexpr uint32_t DOUBLE_SWIPE_MS = 600;
 
 enum Action : uint8_t { PAUSE_TIMER, RESUME_TIMER, RESET_TIMER, SET_TOTAL };
 struct Snapshot {
@@ -93,6 +100,8 @@ uint64_t calibrationOffset = 0;
 bool buildActive = false, rawDetected = false, candidateDetected = false, timerPaused = false, snapshotNeeded = false;
 uint64_t candidateSince = 0;
 bool scanArmed = false;
+bool swipePending = false;
+uint64_t firstSwipeAt = 0;
 char cabinetId[33] = {};
 uint64_t cabinetStarted = 0, cabinetFinished = 0, cabinetElapsed = 0;
 bool buzzerActive = false;
@@ -211,6 +220,7 @@ void serviceTimerCommand(uint64_t now, bool detected) {
       queueSnapshot(detected, now); // Immediately capture the applied state/baseline.
       lastSnapshot = now;
       snapshotNeeded = false;
+      swipePending = false; // A remote command cancels an unresolved local gesture.
       result.applied = true;
       result.total = totalMs;
       strcpy(result.counter, counterId);
@@ -432,7 +442,7 @@ void networkTask(void *parameter) {
     !strstr(WIFI_SSID, "YOUR_") && !strstr(WIFI_PASSWORD, "YOUR_") &&
     !strstr(DEVICE_TOKEN, "YOUR_");
   while (!configured) {
-    networkError.store(true);
+    networkErrors.store(CONFIG_ERROR);
     Serial.println("Network disabled: configure secrets.h (including public root CA).");
     vTaskDelay(pdMS_TO_TICKS(10000));
   }
@@ -469,11 +479,12 @@ void networkTask(void *parameter) {
       ntpWaitSince = 0;
     }
     // Give startup Wi-Fi/NTP 30 seconds; pending API errors remain visible.
-    networkError.store(
-      (!connected && now - disconnectedSince >= 30000) ||
-      (connected && !clockReady() && now - ntpWaitSince >= 30000) ||
-      laneError[0] || laneError[1] || laneError[2] || laneError[3] ||
-      malformedCommandError);
+    networkErrors.store(
+      ((!connected && now - disconnectedSince >= 30000) ? WIFI_ERROR : 0) |
+      ((connected && !clockReady() && now - ntpWaitSince >= 30000) ? CLOCK_ERROR : 0) |
+      (laneError[0] ? HEARTBEAT_ERROR : 0) | (laneError[1] ? ACK_ERROR : 0) |
+      (laneError[2] ? POLL_ERROR : 0) | (laneError[3] ? EVENT_ERROR : 0) |
+      (malformedCommandError ? MALFORMED_COMMAND_ERROR : 0));
 
     if (awaitingLocal) {
       TimerResult result;
@@ -574,7 +585,7 @@ void networkTask(void *parameter) {
       path = "/api/v1/heartbeat";
       JsonDocument doc;
       doc["deviceId"] = DEVICE_ID;
-      doc["firmware"] = "biltoki-cabinets-1.3";
+      doc["firmware"] = "biltoki-gestures-1.4";
       serializeJson(doc, body);
       retry = &heartbeatRetry;
     } else if (selected == 1) {
@@ -662,7 +673,7 @@ void setup() {
   Serial.begin(9600);
   unsigned long start = millis();
   while (!Serial && millis() - start < 5000) delay(10);
-  Serial.println("Starting Biltoki: sensor D8, detection LED D2, CLK D4, DIO D5, Wi-Fi LED D6, error LED D7, buzzer D9.");
+  Serial.println("Starting Biltoki: sensor D8, yellow counting LED D2, CLK D4, DIO D5, Wi-Fi LED D6, error LED D7, buzzer D9.");
   setenv("TZ", "UTC0", 1);
   tzset();
   pinMode(SENSOR_PIN, INPUT); // Existing EXTERNAL 10k pull-up to 3.3V required.
@@ -701,30 +712,52 @@ void loop() {
   advanceTimer(now);
   int sensorRaw = digitalRead(SENSOR_PIN);
   rawDetected = sensorRaw == HIGH;
+  // Resolve a single swipe only after allowing time for a second swipe.
+  if (swipePending && now - firstSwipeAt > DOUBLE_SWIPE_MS) {
+    swipePending = false;
+    if (buildActive) {
+      timerPaused = !timerPaused;
+      scanToggled = true;
+      snapshotNeeded = true;
+      Serial.println(timerPaused ? "[GESTURE] Cabinet paused." : "[GESTURE] Cabinet resumed.");
+    }
+  }
   if (rawDetected != candidateDetected) {
     candidateDetected = rawDetected;
     candidateSince = now;
   } else if (now - candidateSince >= SCAN_DEBOUNCE_MS) {
     if (!candidateDetected) {
-      scanArmed = true; // A stable release is required between scans.
+      scanArmed = true; // A stable release is required between swipes.
     } else if (scanArmed) {
-      buildActive = !buildActive;
-      scanToggled = true;
-      if (buildActive) {
+      scanArmed = false;
+      if (!buildActive) {
+        buildActive = true;
+        timerPaused = false;
+        swipePending = false;
         makeRandomId(cabinetId);
         cabinetStarted = now;
         cabinetFinished = 0;
         cabinetElapsed = 0;
-      } else {
+        scanToggled = true;
+        snapshotNeeded = true;
+        Serial.println("[GESTURE] New cabinet started.");
+      } else if (swipePending) {
+        swipePending = false;
+        buildActive = false;
+        timerPaused = false;
         cabinetFinished = now;
+        scanToggled = true;
+        snapshotNeeded = true;
+        Serial.println("[GESTURE] Double swipe: cabinet completed.");
+      } else {
+        swipePending = true;
+        firstSwipeAt = now;
       }
-      scanArmed = false; // Holding a hand in place cannot toggle repeatedly.
-      snapshotNeeded = true;
     }
   }
   serviceTimerCommand(now, buildActive);
 
-  // Yellow LED follows counting; beep on either hand toggle or remote counting change.
+  // Yellow LED follows counting; beep on each resolved gesture or remote counting change.
   bool isCounting = buildActive && !timerPaused;
   digitalWrite(LED_PIN, isCounting ? HIGH : LOW);
   if (scanToggled || isCounting != wasCounting) {
@@ -750,7 +783,7 @@ void loop() {
       Serial.printf(
         "[SENSOR] D8 raw=%d | buildActive=%s | candidate=%s | paused=%s | timer=%s | totalMs=%llu | edges=%lu\n",
         sensorRaw, buildActive ? "YES" : "NO", candidateDetected ? "YES" : "NO", timerPaused ? "YES" : "NO",
-        timerPaused ? "REMOTE_PAUSED" : (buildActive ? "RUNNING" : "WAITING"),
+        timerPaused ? "PAUSED" : (buildActive ? "RUNNING" : "WAITING"),
         (unsigned long long)totalMs, (unsigned long)sensorEdges);
     }
     sensorEdges = 0;
@@ -776,8 +809,22 @@ void loop() {
     display.showNumberDecEx((seconds / 60) * 100 + seconds % 60, 0x40, true);
   }
   digitalWrite(WIFI_LED_PIN, WiFi.status() == WL_CONNECTED ? HIGH : LOW);
-  digitalWrite(ERROR_LED_PIN,
-    (networkError.load() || hardwareError || queueError || commandError.load()) ? HIGH : LOW);
+  uint32_t errors = networkErrors.load() |
+    (hardwareError ? HARDWARE_ERROR : 0) | (queueError ? QUEUE_ERROR : 0) |
+    (commandError.load() ? COMMAND_ERROR : 0);
+  digitalWrite(ERROR_LED_PIN, errors ? HIGH : LOW);
+  static uint32_t lastErrors = 0;
+  static uint64_t lastErrorLog = 0;
+  if (Serial && (errors != lastErrors || (errors && now - lastErrorLog >= 15000))) {
+    Serial.printf("[ERROR LED] %s | config=%d wifi=%d clock=%d heartbeat=%d ack=%d poll=%d events=%d malformedCommand=%d hardware=%d snapshotQueue=%d command=%d\n",
+      errors ? "ON (1 identifies each cause)" : "OFF (all errors cleared)",
+      !!(errors & CONFIG_ERROR), !!(errors & WIFI_ERROR), !!(errors & CLOCK_ERROR),
+      !!(errors & HEARTBEAT_ERROR), !!(errors & ACK_ERROR), !!(errors & POLL_ERROR),
+      !!(errors & EVENT_ERROR), !!(errors & MALFORMED_COMMAND_ERROR),
+      !!(errors & HARDWARE_ERROR), !!(errors & QUEUE_ERROR), !!(errors & COMMAND_ERROR));
+    lastErrors = errors;
+    lastErrorLog = now;
+  }
   delay(1);
 }
 

@@ -1,6 +1,6 @@
 # Implemented Arduino detection-time contract
 
-The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki uses hand scans as a start/stop toggle, debouncing both detection and release for 100 ms. Its accumulated timer and snapshots use the latched build state; detected does not represent raw hand presence. The D9 active buzzer beeps for 150 ms when counting starts or resumes. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
+The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki uses hand scans as a start/stop toggle, debouncing both detection and release for 100 ms. Its accumulated timer and snapshots use the latched build state; detected does not represent raw hand presence. The D9 active buzzer beeps for 350 ms on each start/stop hand toggle and remote counting-state change. The D2 yellow LED follows counting, not raw sensor presence. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
 
 ## Connection and provisioning
 
@@ -59,7 +59,17 @@ Send snapshots every **5–10 seconds and on transitions**, plus separate 30-sec
 
 ## Biltoki cabinet progress
 
-For a timer-only workstation, the site derives cabinet progress from build-state snapshots. For Biltoki, one hand scan starts a build and the next stops it. A detected interval represents one cabinet being built; a transition to absent completes that cabinet when the build interval is at least 5 seconds. The dashboard reports completed cabinets, remaining target, cabinets expected by now, required time per remaining cabinet, time spent building, time available while no cabinet was being built, and a green/red on-track status. The workstation target is the cabinet target for the selected shift. This keeps the shared site model intact while allowing Biltoki-specific cabinet behavior.
+For a timer-only workstation, the site derives cabinet progress and a cabinet log from accepted snapshots. One hand swipe starts a build immediately. A single subsequent swipe pauses/resumes it after a 600 ms double-swipe window; two swipes within that window complete it, with no five-second minimum. Pauses retain the cabinet ID and do not count as completions. Starting adds a numbered log entry, while completed/remaining/pace metrics count only finished cabinets. Visible numbering starts at 1 for the selected shift/day; durable identity is device + boot + cabinet ID. Time-of-day fields use the organization's timezone in the UI.
+
+Biltoki firmware `biltoki-gestures-1.4` adds an optional `data.cabinet` object:
+
+```json
+{"id":"random-cabinet-id","startedUptimeMs":1000,"finishedUptimeMs":null,"elapsedMs":12000,"running":true}
+```
+
+The start uptime and ID remain fixed for that cabinet. Finish uptime is null until the completion double swipe. Elapsed milliseconds are measured independently of the cumulative counter and exclude local and remote pauses; reset/set-total do not reset cabinet duration. `detected` means the build remains active, including a remote pause; `running` means it is currently counting. Repeated snapshots update the same record. The device retains the completed metadata until the next start, allowing a later snapshot to recover a missed start or finish. Deploy the API update before uploading this firmware; older firmware remains accepted without this optional object.
+
+Start/finish wall times are reconstructed from snapshot UTC and uptime. Unknown clocks display unavailable times, never guessed times. Duration is never extrapolated while offline. A newly observed boot or cabinet marks the previous unfinished cabinet interrupted rather than completed. Historical firmware without cabinet metadata is reconstructed from accepted state transitions and cumulative deltas. Snapshots are retained in RawEvent, so the log needs no new database table or migration. Rejected measurements are excluded. Builds overlapping the selected period remain visible with their original start time; summary build-time totals conservatively exclude builds starting before that period. The 24-hour lookback supports historical transition reconstruction; new metadata can reconstruct an older start from a snapshot in the window.
 
 ## Acknowledgements and heartbeat
 

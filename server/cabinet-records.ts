@@ -15,8 +15,11 @@ export function cabinetRecords(rows: CabinetSample[], start: Date, end: Date, no
   const current = new Map<string, string>();
   const legacy = new Map<string, {key: string; boot: string; counter: string; total: number}>();
   const lastSeen = new Map<string, number>();
-  const time = (row: CabinetSample, uptime: number) => row.occurredAt
-    ? new Date(row.occurredAt.getTime() - (Number(row.uptimeMs) - uptime)).toISOString() : null;
+  const time = (row: CabinetSample, uptime: number) => {
+    if (!row.occurredAt) return null;
+    const date = new Date(row.occurredAt.getTime() - (Number(row.uptimeMs) - uptime));
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  };
   for (const row of rows) {
     const data = row.data, c = data.cabinet;
     let key: string | undefined;
@@ -24,7 +27,12 @@ export function cabinetRecords(rows: CabinetSample[], start: Date, end: Date, no
       key = `${row.deviceId}:${row.bootId}:${c.id}`;
       const old = records.get(key);
       // A completed cabinet stays completed, including repeated idle snapshots.
-      if (old?.status === 'completed') { lastSeen.set(key, (row.occurredAt ?? row.receivedAt).getTime()); continue; }
+      if (old?.status === 'completed') {
+        old.startedAt ??= time(row, c.startedUptimeMs);
+        if (c.finishedUptimeMs !== null) old.finishedAt ??= time(row, c.finishedUptimeMs);
+        lastSeen.set(key, (row.occurredAt ?? row.receivedAt).getTime());
+        continue;
+      }
       records.set(key, {
         id: key, number: 0, deviceId: row.deviceId,
         startedAt: old?.startedAt ?? time(row, c.startedUptimeMs),
