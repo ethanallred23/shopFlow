@@ -44,7 +44,8 @@ constexpr uint32_t SNAPSHOT_INTERVAL = 5000;
 constexpr uint32_t POLL_INTERVAL = 3000;
 constexpr uint32_t SCAN_DEBOUNCE_MS = 100;
 constexpr uint32_t BUZZER_BEEP_MS = 350;
-constexpr uint32_t DOUBLE_SWIPE_MS = 600;
+constexpr uint32_t BUZZER_GAP_MS = 180;
+constexpr uint32_t COMPLETE_HOLD_MS = 3000;
 
 enum Action : uint8_t { PAUSE_TIMER, RESUME_TIMER, RESET_TIMER, SET_TOTAL };
 struct Snapshot {
@@ -92,6 +93,7 @@ char bootId[33]; // Immutable after setup; safe for both tasks to read.
 
 // Only setup()/loop() access these variables.
 uint64_t totalMs = 0, previousTime = 0, lastDisplay = 0, lastSnapshot = 0;
+uint64_t paceNeededMs = 0;
 uint64_t lastQueueWarning = 0;
 uint32_t sequenceNumber = 0;
 char counterId[33];
@@ -100,12 +102,15 @@ uint64_t calibrationOffset = 0;
 bool buildActive = false, rawDetected = false, candidateDetected = false, timerPaused = false, snapshotNeeded = false;
 uint64_t candidateSince = 0;
 bool scanArmed = false;
-bool swipePending = false;
-uint64_t firstSwipeAt = 0;
+bool gestureActive = false;
+uint64_t gestureStartedAt = 0;
+bool completionTriggered = false;
 char cabinetId[33] = {};
 uint64_t cabinetStarted = 0, cabinetFinished = 0, cabinetElapsed = 0;
 bool buzzerActive = false;
 uint64_t buzzerStartedAt = 0;
+uint8_t beepsRemaining = 0;
+bool buzzerGap = false;
 bool commandWaiting = false;
 TimerCommand waitingCommand;
 
@@ -131,8 +136,17 @@ void rejectCommand(CommandRecord &record, const char *error);
 void storeResult(CommandRecord &record, const TimerResult &result);
 void scheduleRetry(RetryState &retry, uint64_t now, uint64_t serverDelay);
 void networkTask(void *parameter);
+void startBeeps(uint8_t count, uint64_t now);
 
 uint64_t uptimeMs() { return (uint64_t)esp_timer_get_time() / 1000ULL; }
+void startBeeps(uint8_t count, uint64_t now) {
+  if (!count) return;
+  beepsRemaining = count;
+  buzzerGap = false;
+  buzzerStartedAt = now;
+  buzzerActive = true;
+  digitalWrite(BUZZER_PIN, HIGH);
+}
 int64_t utcMs() {
   timeval tv;
   gettimeofday(&tv, nullptr);
@@ -216,11 +230,13 @@ void serviceTimerCommand(uint64_t now, bool detected) {
         makeRandomId(counterId);
       } else {
         timerPaused = waitingCommand.action == PAUSE_TIMER;
+        startBeeps(timerPaused ? 2 : 1, now);
       }
       queueSnapshot(detected, now); // Immediately capture the applied state/baseline.
       lastSnapshot = now;
       snapshotNeeded = false;
-      swipePending = false; // A remote command cancels an unresolved local gesture.
+      gestureActive = false; // A remote command cancels an unresolved local gesture.
+      completionTriggered = false;
       result.applied = true;
       result.total = totalMs;
       strcpy(result.counter, counterId);
@@ -585,7 +601,7 @@ void networkTask(void *parameter) {
       path = "/api/v1/heartbeat";
       JsonDocument doc;
       doc["deviceId"] = DEVICE_ID;
-      doc["firmware"] = "biltoki-gestures-1.4";
+      doc["firmware"] = "biltoki-gestures-1.6";
       serializeJson(doc, body);
       retry = &heartbeatRetry;
     } else if (selected == 1) {
@@ -612,7 +628,7 @@ void networkTask(void *parameter) {
       body = pendingEvent;
       retry = &eventRetry;
     }
-    HttpResult response = requestHttp(method, path, body, selected == 2 || selected == 1);
+    HttpResult response = requestHttp(method, path, body, selected != 3);
     now = uptimeMs();
     globalDue = now + 500; // At most two HTTP requests/second for this device.
     bool success = response.status == 200;
@@ -628,6 +644,12 @@ void networkTask(void *parameter) {
       retry->backoff = 1000;
       retry->due = now;
       if (selected == 0) heartbeatRetry.due = now + 30000;
+      if (selected == 0) {
+        JsonDocument heartbeat;
+        if (!response.oversized && !deserializeJson(heartbeat, response.body) && heartbeat["paceNeededMs"].is<uint64_t>()) {
+          paceNeededMs = heartbeat["paceNeededMs"].as<uint64_t>();
+        }
+      }
       if (selected == 1) active = nullptr; // History entry and original result remain.
       if (selected == 2) {
         pollRetry.due = now + POLL_INTERVAL;
@@ -708,66 +730,72 @@ void setup() {
 void loop() {
   uint64_t now = uptimeMs();
   bool wasCounting = buildActive && !timerPaused;
-  bool scanToggled = false;
   advanceTimer(now);
   int sensorRaw = digitalRead(SENSOR_PIN);
   rawDetected = sensorRaw == HIGH;
-  // Resolve a single swipe only after allowing time for a second swipe.
-  if (swipePending && now - firstSwipeAt > DOUBLE_SWIPE_MS) {
-    swipePending = false;
-    if (buildActive) {
-      timerPaused = !timerPaused;
-      scanToggled = true;
-      snapshotNeeded = true;
-      Serial.println(timerPaused ? "[GESTURE] Cabinet paused." : "[GESTURE] Cabinet resumed.");
-    }
-  }
   if (rawDetected != candidateDetected) {
     candidateDetected = rawDetected;
     candidateSince = now;
   } else if (now - candidateSince >= SCAN_DEBOUNCE_MS) {
     if (!candidateDetected) {
-      scanArmed = true; // A stable release is required between swipes.
-    } else if (scanArmed) {
+      if (gestureActive && buildActive && !completionTriggered) {
+        gestureActive = false;
+        timerPaused = !timerPaused;
+        snapshotNeeded = true;
+        startBeeps(timerPaused ? 2 : 1, now);
+        Serial.println(timerPaused ? "[GESTURE] Cabinet paused." : "[GESTURE] Cabinet resumed.");
+      }
+      scanArmed = true; // A stable release is required between gestures.
+    } else if (scanArmed && !gestureActive) {
       scanArmed = false;
       if (!buildActive) {
         buildActive = true;
         timerPaused = false;
-        swipePending = false;
         makeRandomId(cabinetId);
         cabinetStarted = now;
         cabinetFinished = 0;
         cabinetElapsed = 0;
-        scanToggled = true;
         snapshotNeeded = true;
+        startBeeps(1, now);
         Serial.println("[GESTURE] New cabinet started.");
-      } else if (swipePending) {
-        swipePending = false;
-        buildActive = false;
-        timerPaused = false;
-        cabinetFinished = now;
-        scanToggled = true;
-        snapshotNeeded = true;
-        Serial.println("[GESTURE] Double swipe: cabinet completed.");
       } else {
-        swipePending = true;
-        firstSwipeAt = now;
+        gestureActive = true;
+        gestureStartedAt = now;
+        completionTriggered = false;
       }
     }
   }
+  if (buildActive && gestureActive && !completionTriggered &&
+      now - gestureStartedAt >= COMPLETE_HOLD_MS) {
+    completionTriggered = true;
+    gestureActive = false;
+    buildActive = false;
+    timerPaused = false;
+    cabinetFinished = now;
+    snapshotNeeded = true;
+    startBeeps(3, now);
+    Serial.println("[GESTURE] Three-second hold: cabinet completed.");
+  }
   serviceTimerCommand(now, buildActive);
 
-  // Yellow LED follows counting; beep on each resolved gesture or remote counting change.
+  // Yellow LED follows counting. Local gestures provide the beep pattern;
+  // remote commands beep once when they change counting state.
   bool isCounting = buildActive && !timerPaused;
   digitalWrite(LED_PIN, isCounting ? HIGH : LOW);
-  if (scanToggled || isCounting != wasCounting) {
-    digitalWrite(BUZZER_PIN, HIGH);
-    buzzerStartedAt = now;
-    buzzerActive = true;
+  if (isCounting != wasCounting && beepsRemaining == 0) {
+    startBeeps(1, now);
   }
   if (buzzerActive && now - buzzerStartedAt >= BUZZER_BEEP_MS) {
     digitalWrite(BUZZER_PIN, LOW);
     buzzerActive = false;
+    if (beepsRemaining) --beepsRemaining;
+    buzzerStartedAt = now;
+    buzzerGap = true;
+  } else if (buzzerGap && beepsRemaining && now - buzzerStartedAt >= BUZZER_GAP_MS) {
+    buzzerGap = false;
+    buzzerActive = true;
+    buzzerStartedAt = now;
+    digitalWrite(BUZZER_PIN, HIGH);
   }
 
   // Log the raw hand sensor and latched timer state once per second.
@@ -804,7 +832,8 @@ void loop() {
   }
   if (now - lastDisplay >= 200) {
     lastDisplay = now;
-    uint64_t seconds = totalMs / 1000;
+    uint64_t remainingMs = paceNeededMs > cabinetElapsed ? paceNeededMs - cabinetElapsed : 0;
+    uint64_t seconds = (buildActive ? remainingMs : paceNeededMs) / 1000;
     if (seconds > 5999) seconds = 5999;
     display.showNumberDecEx((seconds / 60) * 100 + seconds % 60, 0x40, true);
   }

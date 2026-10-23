@@ -34,6 +34,8 @@ The sketch sends heartbeat and detection-time snapshots, polls commands, and ack
 
 The updated sketch has not been compiled or tested on physical hardware in this workspace. Upload it to Biltoki only after compiling against the installed Arduino ESP32 core and confirming the sensor behavior on the actual cabinet station.
 
+Gesture update for firmware 1.6: a short swipe pauses or resumes the active cabinet; a continuous 3-second hold completes it. Feedback is one 350 ms beep for start/resume, two beeps for pause, and three beeps for completion, with 180 ms gaps between beeps. The heartbeat response now supplies the website's current “Pace needed” value. The TM1637 shows that pace while idle and counts down the remaining time for the active cabinet. This replaces the previous cumulative day-time display. The API must be deployed before uploading this firmware.
+
 Cabinet state and queued snapshots are held in RAM. Reboot starts stopped; the site marks a previously reported unfinished cabinet interrupted after it sees the new boot. Long network outages can exhaust the bounded queue and lose intermediate cabinets; power loss loses unsent data. Time-of-day fields remain unavailable until a snapshot has a synchronized clock, while device-measured duration remains monotonic.
 
 ## Red LED diagnostics

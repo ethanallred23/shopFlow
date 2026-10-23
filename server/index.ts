@@ -12,6 +12,8 @@ import {db} from './db';
 import {authorizeDevice,hash,HttpError,ingest,newToken} from './ingestion';
 import {asyncRoute,auth,owned,role} from './auth';
 import {dashboard} from './dashboard';
+import {cabinetProgress} from './cabinet-progress';
+import {shiftWindow} from './domain';
 import {expireCommands,acknowledgeCommand} from './commands';
 export const app=express();
 const log=pino(); const updates=new EventEmitter();updates.setMaxListeners(1000);
@@ -34,8 +36,24 @@ const bearer=(req:express.Request)=>{const value=req.headers.authorization;if(!v
 app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);updates.emit(result.orgId);const {orgId,...ack}=result;res.json(ack);}));
 app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
   const body=z.object({deviceId:z.string().uuid(),firmware:z.string().max(100).optional()}).strict().parse(req.body);
-  const orgId=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});return d.orgId;});
-  updates.emit(orgId);res.json({ok:true});
+  const result=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});return {orgId:d.orgId,workstationId:d.workstationId};});
+  let paceNeededMs=0;
+  if(result.workstationId){
+    const [org,station,shifts]=await Promise.all([
+      db.organization.findUniqueOrThrow({where:{id:result.orgId},select:{timezone:true}}),
+      db.workstation.findUniqueOrThrow({where:{id:result.workstationId}}),
+      db.shift.findMany({where:{orgId:result.orgId}})
+    ]);
+    const localNow=DateTime.now().setZone(org.timezone);
+    const shift=shifts.find(s=>{const m=localNow.hour*60+localNow.minute;return s.endMinute<=s.startMinute?m>=s.startMinute||m<s.endMinute:m>=s.startMinute&&m<s.endMinute;});
+    if(shift){
+      const date=shift.endMinute<=shift.startMinute&&localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}).toISODate()!:localNow.toISODate()!;
+      const window=shiftWindow(date,org.timezone,shift);
+      const progress=await cabinetProgress([body.deviceId],station.id,window.start,window.end,station.target,window.workingMs,window.elapsedMs);
+      paceNeededMs=progress.requiredMsPerCabinet;
+    }
+  }
+  updates.emit(result.orgId);res.json({ok:true,paceNeededMs});
 }));
 app.get('/api/v1/commands',asyncRoute(async(req,res)=>{
   const commands=await db.$transaction(async tx=>{

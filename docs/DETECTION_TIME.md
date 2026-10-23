@@ -59,9 +59,9 @@ Send snapshots every **5–10 seconds and on transitions**, plus separate 30-sec
 
 ## Biltoki cabinet progress
 
-For a timer-only workstation, the site derives cabinet progress and a cabinet log from accepted snapshots. One hand swipe starts a build immediately. A single subsequent swipe pauses/resumes it after a 600 ms double-swipe window; two swipes within that window complete it, with no five-second minimum. Pauses retain the cabinet ID and do not count as completions. Starting adds a numbered log entry, while completed/remaining/pace metrics count only finished cabinets. Visible numbering starts at 1 for the selected shift/day; durable identity is device + boot + cabinet ID. Time-of-day fields use the organization's timezone in the UI.
+For a timer-only workstation, the site derives cabinet progress and a cabinet log from accepted snapshots. One hand swipe starts a build immediately. A short subsequent swipe pauses or resumes it; holding the hand over the sensor for three seconds completes it, with no five-second minimum. Pauses retain the cabinet ID and do not count as completions. Starting adds a numbered log entry, while completed/remaining/pace metrics count only finished cabinets. Visible numbering starts at 1 for the selected shift/day; durable identity is device + boot + cabinet ID. Time-of-day fields use the organization's timezone in the UI. Buzzer feedback is one beep for start/resume, two for pause, and three for completion.
 
-Biltoki firmware `biltoki-gestures-1.4` adds an optional `data.cabinet` object:
+Biltoki firmware `biltoki-gestures-1.5` adds an optional `data.cabinet` object:
 
 ```json
 {"id":"random-cabinet-id","startedUptimeMs":1000,"finishedUptimeMs":null,"elapsedMs":12000,"running":true}
