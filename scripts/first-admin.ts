@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
 
 export const adminInput = z.object({
-  organization: z.string().trim().min(1).max(191).default('CI Team'),
+  organization: z.string().trim().min(1).max(191).default('Quality Craft Wood Works'),
   timezone: z.string().trim().refine(v => DateTime.now().setZone(v).isValid, 'Enter a valid IANA timezone').default('America/Denver'),
   name: z.string().trim().min(1).max(191),
   email: z.string().trim().toLowerCase().email().max(191),

@@ -7,3 +7,4 @@ coverage/
 *.key
 *.pfx
 *.p12
+arduino/**/secrets.h

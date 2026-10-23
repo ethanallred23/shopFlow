@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:check": "tsx scripts/check-db.ts",
     "db:seed": "tsx prisma/seed.ts",
+    "demo:biltoki": "tsx scripts/seed-biltoki-example.ts",
     "rebuild": "tsx server/rebuild.ts",
     "simulate": "tsx scripts/simulator.ts",
     "db:setup": "tsx scripts/create-admin.ts",

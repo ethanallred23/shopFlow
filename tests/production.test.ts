@@ -16,7 +16,7 @@ it('reports all missing production variables without printing credentials', () =
 
 it('defaults organization settings and accepts surrounding timezone whitespace', () => {
   const input = {name:' Ethan Allred ', email:' admin@example.test ', password:'test-password-only'};
-  expect(adminInput.parse(input)).toMatchObject({organization:'CI Team', timezone:'America/Denver', name:'Ethan Allred', email:'admin@example.test'});
+  expect(adminInput.parse(input)).toMatchObject({organization:'Quality Craft Wood Works', timezone:'America/Denver', name:'Ethan Allred', email:'admin@example.test'});
   expect(adminInput.parse({...input,timezone:' America/Denver '})).toMatchObject({timezone:'America/Denver'});
   expect(adminInput.safeParse({...input,timezone:'Invalid/Timezone'}).success).toBe(false);
 });

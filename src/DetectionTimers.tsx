@@ -1,11 +1,13 @@
 import {useEffect,useState} from 'react';
 import {Timer,Radio} from 'lucide-react';
+import {CabinetProgress} from './CabinetProgress';
 
-export const duration=(ms:number|null)=>ms===null?'—':`${Math.floor(ms/60000).toLocaleString()}:${String(Math.floor(ms/1000)%60).padStart(2,'0')}`;
+export const duration=(ms:number|null)=>{if(ms===null)return '—';const totalMinutes=Math.floor(ms/60000),hours=Math.floor(totalMinutes/60),minutes=totalMinutes%60;return hours?`${hours}h ${String(minutes).padStart(2,'0')}m`:`${minutes}m`;};
 type Command=(deviceId:string,type:string,totalDetectedMs?:number)=>Promise<void>;
 
-export function DetectionTimers({timers,status,zone,onCommand,canControl=false}:{timers:any[];status:string;zone:string;onCommand?:Command;canControl?:boolean}){
+export function DetectionTimers({timers,status,zone,onCommand,canControl=false,devMode=false,onSimulate}:{timers:any[];status:string;zone:string;onCommand?:Command;canControl?:boolean;devMode?:boolean;onSimulate?:(completed:number)=>Promise<void>}){
  if(!timers?.length)return null;
+ if(timers[0]?.cabinet)return <><CabinetProgress progress={timers[0].cabinet} devMode={devMode} onSimulate={onSimulate}/><section className="panel detection-panel"><h2><Timer size={18}/> Detected time</h2><p>Device-measured accumulation</p>{timers.map(t=><TimerDevice key={t.deviceId} t={t} zone={zone} onCommand={onCommand} canControl={canControl}/>)}</section></>;
  return <section className="panel detection-panel"><h2><Timer size={18}/> Detected time</h2><p>Device-measured accumulation · minutes:seconds · pauses when absent</p>{timers.map(t=><TimerDevice key={t.deviceId} t={t} zone={zone} onCommand={onCommand} canControl={canControl}/>)}</section>;
 }
 

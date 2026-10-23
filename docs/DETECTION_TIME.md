@@ -1,6 +1,6 @@
 # Implemented Arduino detection-time contract
 
-Hardware: D5 HIGH = detected; D4 LED follows it. TM1637 CLK D2/DIO D3 at 3.3 V displays accumulated minutes:seconds. Accumulate milliseconds while HIGH, pause while LOW, reset on reboot. Preserve the working firmware's sampling/display code. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
+The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki qualifies both arrival and departure after 5 seconds of stable sensing; its accumulated timer and snapshots use that qualified state. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
 
 ## Connection and provisioning
 
@@ -56,6 +56,10 @@ Send snapshots every **5–10 seconds and on transitions**, plus separate 30-sec
 - Clock corrections do not discard monotonic totals within a counter, but can make intervals unallocatable. Timestamp elapsed time must agree with monotonic uptime within 2 seconds to qualify for placement. This is not proof of device clock accuracy.
 - A delta enters a selected shift/day only when consecutive accepted snapshots have valid device times, consistent clocks, the same assignment, and the entire interval lies inside that window. Boundary-spanning deltas are shown as uncertain and excluded; no uniform distribution is invented. First snapshots, unknown clocks and changed assignments are unallocated. All-time device totals explicitly include previous assignments/counters.
 - Detected/absent is from the latest accepted snapshot. Both sample time and receipt must be within 30 seconds to show Current. Old buffered or unknown-time snapshots are labeled stale/last reported. Connectivity independently uses the 90-second heartbeat threshold. The UI does not extrapolate elapsed time between snapshots.
+
+## Biltoki cabinet progress
+
+For a timer-only workstation, the site derives cabinet progress from qualified detection snapshots. A detected interval represents one cabinet being built; a transition to absent completes that cabinet when the qualified interval is at least 5 seconds. The dashboard reports completed cabinets, remaining target, cabinets expected by now, required time per remaining cabinet, time spent building, time available while no cabinet was being built, and a green/red on-track status. The workstation target is the cabinet target for the selected shift. This keeps the shared site model intact while allowing Biltoki-specific cabinet behavior.
 
 ## Acknowledgements and heartbeat
 

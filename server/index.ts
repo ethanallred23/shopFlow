@@ -1,4 +1,4 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -41,7 +41,7 @@ app.get('/api/v1/commands',asyncRoute(async(req,res)=>{
   const commands=await db.$transaction(async tx=>{
     const d=await authorizeDevice(tx,bearer(req));
     await expireCommands(tx,d.id);
-    return tx.deviceCommand.findMany({where:{deviceId:d.id,status:'pending',expiresAt:{gt:new Date()}},orderBy:{createdAt:'asc'},take:10,select:{id:true,type:true,payload:true,createdAt:true,expiresAt:true}});
+    return tx.deviceCommand.findMany({where:{deviceId:d.id,status:'pending',expiresAt:{gt:new Date()}},take:10,select:{id:true,type:true,payload:true,createdAt:true,expiresAt:true}});
   });
   res.json({commands});
 }));
@@ -89,6 +89,29 @@ app.get('/api/devices/:id/commands/:commandId',role('supervisor'),asyncRoute(asy
 app.get('/api/devices/:id/events',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);const cursor=z.string().regex(/^\d+$/).optional().parse(req.query.cursor);res.json(await db.rawEvent.findMany({where:{deviceId:req.params.id,orgId:req.auth!.orgId,...(cursor?{id:{lt:BigInt(cursor)}}:{})},orderBy:{id:'desc'},take:50}));}));
 app.get('/api/devices/:id/assignments',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.assignment.findMany({where:{deviceId:req.params.id},orderBy:{startedAt:'desc'},take:100}));}));
 app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),target:z.number().int().min(0).max(10000000).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
+app.post('/api/dev/workstations/:id/cabinets/complete',role('admin'),asyncRoute(async(req,res)=>{
+  const workstation=await owned('workstation',req.params.id,req.auth!.orgId);
+  const org=await db.organization.findUniqueOrThrow({where:{id:req.auth!.orgId},select:{demo:true}});
+  if(process.env.NODE_ENV==='production'||!org.demo)throw new HttpError(404,'Developer simulation is only available in demo mode');
+  const device=await db.device.findFirst({where:{orgId:req.auth!.orgId,workstationId:workstation.id,archived:false,capabilities:{equals:['detection_time']}}});
+  if(!device)throw new HttpError(409,'Assign a timer device to this workstation before simulating a completion');
+  const now=Date.now(),buildStarted=new Date(now-10_000),finished=new Date(now);
+  const base={orgId:req.auth!.orgId,deviceId:device.id,workstationId:workstation.id,bootId:'developer-simulation',schemaVersion:1,timeQuality:'trusted',minIntervalMs:0,product:'Developer simulation',job:'Developer simulation'};
+  await db.rawEvent.createMany({data:[{...base,eventId:`dev-cabinet-${crypto.randomUUID()}-start`,sequence:0,uptimeMs:BigInt(now-10_000),type:'sensor.detection_time_snapshot',data:{detected:true,totalDetectedMs:10_000,counterId:'developer-simulation'},occurredAt:buildStarted},{...base,eventId:`dev-cabinet-${crypto.randomUUID()}-finish`,sequence:1,uptimeMs:BigInt(now),type:'sensor.detection_time_snapshot',data:{detected:false,totalDetectedMs:10_000,counterId:'developer-simulation'},occurredAt:finished}]});
+  updates.emit(req.auth!.orgId);res.status(201).json({ok:true,simulated:true});
+}));
+app.put('/api/dev/workstations/:id/cabinets/progress',role('admin'),asyncRoute(async(req,res)=>{
+  const workstation=await owned('workstation',req.params.id,req.auth!.orgId);
+  const org=await db.organization.findUniqueOrThrow({where:{id:req.auth!.orgId},select:{demo:true}});
+  if(process.env.NODE_ENV==='production'||!org.demo)throw new HttpError(404,'Developer simulation is only available in demo mode');
+  const {completed}=z.object({completed:z.number().int().min(0).max(500)}).parse(req.body);
+  const device=await db.device.findFirst({where:{orgId:req.auth!.orgId,workstationId:workstation.id,archived:false,capabilities:{equals:['detection_time']}}});
+  if(!device)throw new HttpError(409,'Assign a timer device to this workstation before editing test progress');
+  const now=Date.now(),base={orgId:req.auth!.orgId,deviceId:device.id,workstationId:workstation.id,bootId:'developer-simulation',schemaVersion:1,timeQuality:'trusted',minIntervalMs:0,product:'Developer simulation',job:'Developer simulation'};
+  const events=Array.from({length:completed*2},(_,index)=>{const cabinet=Math.floor(index/2),isStart=index%2===0,at=new Date(now-(completed-cabinet-1)*20_000+(isStart?-10_000:0));return {...base,eventId:`dev-cabinet-${cabinet}-${crypto.randomUUID()}`,sequence:index,uptimeMs:BigInt(Math.max(0,at.getTime())),type:'sensor.detection_time_snapshot',data:{detected:isStart,totalDetectedMs:10_000,counterId:'developer-'+cabinet},occurredAt:at};});
+  await db.$transaction(async tx=>{await tx.rawEvent.deleteMany({where:{orgId:req.auth!.orgId,workstationId:workstation.id,eventId:{startsWith:'dev-cabinet-'}}});if(events.length)await tx.rawEvent.createMany({data:events});});
+  updates.emit(req.auth!.orgId);res.json({ok:true,completed});
+}));
 app.post('/api/workstations/:id/notes',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({text:z.string().min(1).max(2000),reason:z.enum(['Material shortage','Changeover','Maintenance','Quality check','Other']).nullable(),minutes:z.number().int().min(0).max(1440).nullable()}).parse(req.body);res.json(await db.note.create({data:{...data,orgId:req.auth!.orgId,workstationId:req.params.id,author:req.auth!.name}}));updates.emit(req.auth!.orgId);}));
 app.get('/api/reports.csv',asyncRoute(async(req,res)=>{const data=await dashboard(req.auth!.orgId,req.query);const escape=(s:unknown)=>'"'+String(s??'Unavailable').replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"','""')+'"';res.set({'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="shopflow-report.csv"'}).send([['Date','Period','Workstation','Product filter','Recorded output','Scheduled target','Expected so far','Median cycle ms','P90 cycle ms','Data status'],...data.stations.map(s=>[data.date,req.query.period==='day'?'Calendar day':data.shifts.find(x=>x.id===data.shiftId)?.name,s.name,req.query.product??'All',s.count,s.target,s.expected,s.median,s.p90,s.status])].map(row=>row.map(escape).join(',')).join('\r\n'));}));
 app.get('/api/settings',role('admin'),asyncRoute(async(req,res)=>res.json({users:await db.user.findMany({where:{orgId:req.auth!.orgId},select:{id:true,email:true,name:true,role:true}})})));
@@ -110,3 +133,4 @@ if(process.env.NODE_ENV!=='test'){
   const server=app.listen(port,host,()=>log.info({host,port},'ShopFlow API listening'));
   server.requestTimeout=15000;server.headersTimeout=10000;server.setTimeout(30000);
 }
+

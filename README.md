@@ -1,8 +1,10 @@
 # ShopFlow
 
+**Arduino devices:** the firmware source-of-truth collection is [`arduino/`](arduino/README.md). Biltoki's canonical sketch is [arduino/Biltoki/Biltoki.ino](arduino/Biltoki/Biltoki.ino), with [Biltoki setup and maintenance](arduino/Biltoki/README.md). Update affected firmware alongside site changes, then upload it to the physical device.
+
 Arduino timers now have a **Detection time only** device mode and separate accumulated-time/state metrics. See the [current timer firmware contract](docs/DETECTION_TIME.md), [Windows LAN HTTPS setup](docs/LAN_HTTPS.md), and [public ESP32 root CA](certs/shopflow-root-ca.pem). Private keys remain under ignored `.local/`.
 
-A production-flow application built with Express + TypeScript, MySQL 8 + Prisma, React + Vite, Tailwind CSS, Recharts and server-sent events. Includes authenticated dashboards, workstation detail, device provisioning, CSV reports, floor display, organization settings, a simulator and a Nano ESP32 example.
+A production-flow application for Quality Craft Wood Works, operated by its CI Team. It uses Express + TypeScript, MySQL 8 + Prisma, React + Vite, Tailwind CSS, Recharts and server-sent events. Includes authenticated dashboards, workstation detail, device provisioning, CSV reports, floor display, internal organization settings, a simulator and a Nano ESP32 example.
 
 ## Local startup (PowerShell)
 
@@ -73,6 +75,8 @@ npm.cmd test
 ```
 
 With the development server running, `npm.cmd run test:browser` exercises the vertical slice in installed Microsoft Edge using the configured seed login. It creates a clearly named smoke-test sensor in the demo organization, sends events, archives that sensor, and writes screenshots under ignored `.local/`.
+
+To preview the Biltoki cabinet workflow locally, run `npm.cmd run demo:biltoki` once after seeding. It adds a clearly labeled example timer workstation with two completed cabinet intervals and one active interval; rerunning the command is safe and does not duplicate it.
 
 Database tests are intentionally opt-in. Use a disposable MySQL database, run migrations against it, then:
 
