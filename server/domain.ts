@@ -1,13 +1,20 @@
 import {z} from 'zod';
 import {DateTime} from 'luxon';
 const base = z.object({schemaVersion:z.literal(1),eventId:z.string().min(1).max(100),deviceId:z.string().uuid(),bootId:z.string().min(1).max(100),sequence:z.number().int().min(0).max(2147483647),uptimeMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),occurredAt:z.string().datetime().nullable(),delivery:z.enum(['live','buffered','unknown']).default('unknown')}).strict();
+const cabinetSchema=z.object({id:z.string().min(1).max(100),startedUptimeMs:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),finishedUptimeMs:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),elapsedMs:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),running:z.boolean()}).strict();
 export const eventSchema=z.discriminatedUnion('type',[
   base.extend({type:z.literal('sensor.state_changed'),data:z.object({detected:z.boolean()}).strict()}),
   base.extend({type:z.literal('cycle.completed'),data:z.object({durationMs:z.number().int().min(1).max(86400000)}).strict()}),
-  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100),calibration:z.object({commandId:z.string().uuid(),offsetMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict().optional()}).strict()})
+  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100),cabinet:cabinetSchema.optional(),calibration:z.object({commandId:z.string().uuid(),offsetMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict().optional()}).strict()})
 ]).superRefine((event,ctx)=>{
   if(event.type==='sensor.detection_time_snapshot' && (event.data.totalDetectedMs-(event.data.calibration?.offsetMs??0)>event.uptimeMs || event.data.totalDetectedMs<(event.data.calibration?.offsetMs??0)))
     ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','totalDetectedMs'],message:'Measured time above calibration cannot exceed uptime or be negative'});
+  if(event.type==='sensor.detection_time_snapshot' && event.data.cabinet){
+    const c=event.data.cabinet,finish=c.finishedUptimeMs??event.uptimeMs;
+    if(c.startedUptimeMs>finish || finish>event.uptimeMs || c.elapsedMs>finish-c.startedUptimeMs ||
+       event.data.detected!==(c.finishedUptimeMs===null) || (c.running&&!event.data.detected))
+      ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','cabinet'],message:'Cabinet timing and state must agree with the snapshot'});
+  }
 });
 export type Envelope=z.infer<typeof eventSchema>;
 export interface State {sequence:number;detected:boolean|null;lastCountUptime:number|null;lastUptime:number}

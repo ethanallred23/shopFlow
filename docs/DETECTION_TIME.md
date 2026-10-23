@@ -1,6 +1,6 @@
 # Implemented Arduino detection-time contract
 
-The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki qualifies both arrival and departure after 5 seconds of stable sensing; its accumulated timer and snapshots use that qualified state. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
+The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki uses hand scans as a start/stop toggle, debouncing both detection and release for 100 ms. Its accumulated timer and snapshots use the latched build state; detected does not represent raw hand presence. The D9 active buzzer beeps for 150 ms when counting starts or resumes. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
 
 ## Connection and provisioning
 
@@ -59,7 +59,7 @@ Send snapshots every **5–10 seconds and on transitions**, plus separate 30-sec
 
 ## Biltoki cabinet progress
 
-For a timer-only workstation, the site derives cabinet progress from qualified detection snapshots. A detected interval represents one cabinet being built; a transition to absent completes that cabinet when the qualified interval is at least 5 seconds. The dashboard reports completed cabinets, remaining target, cabinets expected by now, required time per remaining cabinet, time spent building, time available while no cabinet was being built, and a green/red on-track status. The workstation target is the cabinet target for the selected shift. This keeps the shared site model intact while allowing Biltoki-specific cabinet behavior.
+For a timer-only workstation, the site derives cabinet progress from build-state snapshots. For Biltoki, one hand scan starts a build and the next stops it. A detected interval represents one cabinet being built; a transition to absent completes that cabinet when the build interval is at least 5 seconds. The dashboard reports completed cabinets, remaining target, cabinets expected by now, required time per remaining cabinet, time spent building, time available while no cabinet was being built, and a green/red on-track status. The workstation target is the cabinet target for the selected shift. This keeps the shared site model intact while allowing Biltoki-specific cabinet behavior.
 
 ## Acknowledgements and heartbeat
 

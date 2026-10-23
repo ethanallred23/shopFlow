@@ -21,6 +21,7 @@ const int SENSOR_PIN = D8;
 const int LED_PIN = D2;
 const int WIFI_LED_PIN = D6;   // Blue LED: pin -> 220 ohm -> anode; cathode -> GND.
 const int ERROR_LED_PIN = D7;  // Red LED: its own 220 ohm resistor, cathode -> GND.
+const int BUZZER_PIN = D9;     // Active buzzer: pin -> 220 ohm -> positive; negative -> GND.
 
 // Network task publishes flags; only the hardware loop drives the status LEDs.
 std::atomic<bool> networkError{false};
@@ -35,7 +36,8 @@ constexpr size_t HISTORY_SIZE = 128;
 constexpr size_t HTTP_BODY_LIMIT = 16384;
 constexpr uint32_t SNAPSHOT_INTERVAL = 5000;
 constexpr uint32_t POLL_INTERVAL = 3000;
-constexpr uint32_t CABINET_QUALIFY_MS = 5000;
+constexpr uint32_t SCAN_DEBOUNCE_MS = 100;
+constexpr uint32_t BUZZER_BEEP_MS = 150;
 
 enum Action : uint8_t { PAUSE_TIMER, RESUME_TIMER, RESET_TIMER, SET_TOTAL };
 struct Snapshot {
@@ -45,6 +47,9 @@ struct Snapshot {
   bool detected;
   char counter[33];
   char timestamp[32]; // Empty means occurredAt:null.
+  char cabinetId[33];
+  uint64_t cabinetStarted, cabinetFinished, cabinetElapsed;
+  bool cabinetRunning;
 };
 struct TimerCommand {
   char id[37];
@@ -85,8 +90,13 @@ uint32_t sequenceNumber = 0;
 char counterId[33];
 char calibrationCommandId[37] = {};
 uint64_t calibrationOffset = 0;
-bool detectedPreviously = false, rawDetected = false, candidateDetected = false, timerPaused = false, snapshotNeeded = false;
+bool buildActive = false, rawDetected = false, candidateDetected = false, timerPaused = false, snapshotNeeded = false;
 uint64_t candidateSince = 0;
+bool scanArmed = false;
+char cabinetId[33] = {};
+uint64_t cabinetStarted = 0, cabinetFinished = 0, cabinetElapsed = 0;
+bool buzzerActive = false;
+uint64_t buzzerStartedAt = 0;
 bool commandWaiting = false;
 TimerCommand waitingCommand;
 
@@ -136,6 +146,11 @@ bool queueSnapshot(bool detected, uint64_t sampledAt) {
   sample.uptime = sampledAt;
   sample.sequence = sequenceNumber;
   sample.detected = detected;
+  strcpy(sample.cabinetId, cabinetId);
+  sample.cabinetStarted = cabinetStarted;
+  sample.cabinetFinished = cabinetFinished;
+  sample.cabinetElapsed = cabinetElapsed;
+  sample.cabinetRunning = detected && !timerPaused;
   strcpy(sample.counter, counterId);
   timeval tv;
   gettimeofday(&tv, nullptr);
@@ -156,8 +171,9 @@ bool queueSnapshot(bool detected, uint64_t sampledAt) {
 void advanceTimer(uint64_t now) {
   uint64_t elapsed = now - previousTime;
   previousTime = now;
-  if (detectedPreviously && !timerPaused) {
+  if (buildActive && !timerPaused) {
     totalMs += (elapsed > MAX_TOTAL - totalMs) ? MAX_TOTAL - totalMs : elapsed;
+    cabinetElapsed += (elapsed > MAX_TOTAL - cabinetElapsed) ? MAX_TOTAL - cabinetElapsed : elapsed;
   }
 }
 
@@ -291,9 +307,18 @@ String snapshotBody(const Snapshot &sample) {
   else doc["occurredAt"] = nullptr;
   doc["delivery"] = "buffered"; // Immutable queued sample; never redate a retry.
   doc["type"] = "sensor.detection_time_snapshot";
-  doc["data"]["detected"] = sample.detected; // Physical detection, even when paused.
+  doc["data"]["detected"] = sample.detected; // Latched build state, even when remotely paused.
   doc["data"]["totalDetectedMs"] = sample.total;
   doc["data"]["counterId"] = sample.counter;
+  if (sample.cabinetId[0]) {
+    JsonObject cabinet = doc["data"]["cabinet"].to<JsonObject>();
+    cabinet["id"] = sample.cabinetId;
+    cabinet["startedUptimeMs"] = sample.cabinetStarted;
+    if (sample.detected) cabinet["finishedUptimeMs"] = nullptr;
+    else cabinet["finishedUptimeMs"] = sample.cabinetFinished;
+    cabinet["elapsedMs"] = sample.cabinetElapsed;
+    cabinet["running"] = sample.cabinetRunning;
+  }
   if (sample.calibrationCommand[0]) {
     doc["data"]["calibration"]["commandId"] = sample.calibrationCommand;
     doc["data"]["calibration"]["offsetMs"] = sample.offset;
@@ -549,7 +574,7 @@ void networkTask(void *parameter) {
       path = "/api/v1/heartbeat";
       JsonDocument doc;
       doc["deviceId"] = DEVICE_ID;
-      doc["firmware"] = "nano-timer-remote-1.1";
+      doc["firmware"] = "biltoki-cabinets-1.3";
       serializeJson(doc, body);
       retry = &heartbeatRetry;
     } else if (selected == 1) {
@@ -628,6 +653,8 @@ void networkTask(void *parameter) {
 }
 
 void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
   pinMode(WIFI_LED_PIN, OUTPUT);
   pinMode(ERROR_LED_PIN, OUTPUT);
   digitalWrite(WIFI_LED_PIN, LOW);
@@ -635,11 +662,12 @@ void setup() {
   Serial.begin(9600);
   unsigned long start = millis();
   while (!Serial && millis() - start < 5000) delay(10);
-  Serial.println("Starting Biltoki: sensor D8, detection LED D2, CLK D4, DIO D5, Wi-Fi LED D6, error LED D7.");
+  Serial.println("Starting Biltoki: sensor D8, detection LED D2, CLK D4, DIO D5, Wi-Fi LED D6, error LED D7, buzzer D9.");
   setenv("TZ", "UTC0", 1);
   tzset();
   pinMode(SENSOR_PIN, INPUT); // Existing EXTERNAL 10k pull-up to 3.3V required.
   pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
   display.setBrightness(4);
   display.showNumberDecEx(0, 0x40, true);
   makeRandomId(bootId);
@@ -649,9 +677,9 @@ void setup() {
   resultQueue = xQueueCreate(1, sizeof(TimerResult));
   rawDetected = digitalRead(SENSOR_PIN) == HIGH;
   candidateDetected = rawDetected;
-  detectedPreviously = false; // Require five stable seconds after boot.
+  buildActive = false; // Start stopped; require a stable clear sensor before the first scan.
+  scanArmed = false;
   candidateSince = uptimeMs();
-  digitalWrite(LED_PIN, rawDetected ? HIGH : LOW);
   previousTime = uptimeMs();
   lastSnapshot = previousTime;
   if (!snapshotQueue || !commandQueue || !resultQueue) {
@@ -659,7 +687,7 @@ void setup() {
     Serial.println("Queue allocation failed; hardware timer only.");
     return;
   }
-  queueSnapshot(detectedPreviously, previousTime); // Zero baseline for this boot.
+  queueSnapshot(buildActive, previousTime); // Zero baseline for this boot.
   if (xTaskCreate(networkTask, "ShopFlowNetwork", 16384, nullptr, 1, nullptr) != pdPASS) {
     hardwareError = true;
     Serial.println("Network task creation failed; hardware timer only.");
@@ -668,20 +696,48 @@ void setup() {
 
 void loop() {
   uint64_t now = uptimeMs();
+  bool wasCounting = buildActive && !timerPaused;
+  bool scanToggled = false;
   advanceTimer(now);
   int sensorRaw = digitalRead(SENSOR_PIN);
   rawDetected = sensorRaw == HIGH;
   if (rawDetected != candidateDetected) {
     candidateDetected = rawDetected;
     candidateSince = now;
-  } else if (candidateDetected != detectedPreviously && now - candidateSince >= CABINET_QUALIFY_MS) {
-    detectedPreviously = candidateDetected;
-    snapshotNeeded = true;
+  } else if (now - candidateSince >= SCAN_DEBOUNCE_MS) {
+    if (!candidateDetected) {
+      scanArmed = true; // A stable release is required between scans.
+    } else if (scanArmed) {
+      buildActive = !buildActive;
+      scanToggled = true;
+      if (buildActive) {
+        makeRandomId(cabinetId);
+        cabinetStarted = now;
+        cabinetFinished = 0;
+        cabinetElapsed = 0;
+      } else {
+        cabinetFinished = now;
+      }
+      scanArmed = false; // Holding a hand in place cannot toggle repeatedly.
+      snapshotNeeded = true;
+    }
   }
-  digitalWrite(LED_PIN, rawDetected ? HIGH : LOW); // Indicator follows physical presence, even during qualification.
-  serviceTimerCommand(now, detectedPreviously);
+  serviceTimerCommand(now, buildActive);
 
-  // Log the SAME input sample used by the LED and timer, once per second.
+  // Yellow LED follows counting; beep on either hand toggle or remote counting change.
+  bool isCounting = buildActive && !timerPaused;
+  digitalWrite(LED_PIN, isCounting ? HIGH : LOW);
+  if (scanToggled || isCounting != wasCounting) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    buzzerStartedAt = now;
+    buzzerActive = true;
+  }
+  if (buzzerActive && now - buzzerStartedAt >= BUZZER_BEEP_MS) {
+    digitalWrite(BUZZER_PIN, LOW);
+    buzzerActive = false;
+  }
+
+  // Log the raw hand sensor and latched timer state once per second.
   // Count transitions between reports so brief changes are visible too.
   static uint64_t lastSensorLog = 0;
   static int lastRawLoggedSample = -1;
@@ -692,16 +748,16 @@ void loop() {
     lastSensorLog = now;
     if (Serial) {
       Serial.printf(
-        "[SENSOR] D8 raw=%d | qualified=%s | candidate=%s | paused=%s | timer=%s | totalMs=%llu | edges=%lu\n",
-        sensorRaw, detectedPreviously ? "YES" : "NO", candidateDetected ? "YES" : "NO", timerPaused ? "YES" : "NO",
-        timerPaused ? "REMOTE_PAUSED" : (detectedPreviously ? "RUNNING" : "WAITING"),
+        "[SENSOR] D8 raw=%d | buildActive=%s | candidate=%s | paused=%s | timer=%s | totalMs=%llu | edges=%lu\n",
+        sensorRaw, buildActive ? "YES" : "NO", candidateDetected ? "YES" : "NO", timerPaused ? "YES" : "NO",
+        timerPaused ? "REMOTE_PAUSED" : (buildActive ? "RUNNING" : "WAITING"),
         (unsigned long long)totalMs, (unsigned long)sensorEdges);
     }
     sensorEdges = 0;
   }
 
   if (snapshotQueue && (snapshotNeeded || now - lastSnapshot >= SNAPSHOT_INTERVAL)) {
-    if (queueSnapshot(detectedPreviously, now)) {
+    if (queueSnapshot(buildActive, now)) {
       queueError = false;
       lastSnapshot = now;
       snapshotNeeded = false;
