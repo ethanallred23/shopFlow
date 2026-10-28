@@ -11,12 +11,15 @@ export type CabinetProgress={
 export async function cabinetProgress(deviceIds:string[],workstationId:string,start:Date,end:Date,target:number,workingMs:number,elapsedMs:number):Promise<CabinetProgress>{
   const until=new Date(Math.min(Date.now(),end.getTime()));
   const before=new Date(start.getTime()-24*60*60*1000);
-  const rows=deviceIds.length&&until>start?await db.rawEvent.findMany({
-    where:{deviceId:{in:deviceIds},workstationId,type:'sensor.detection_time_snapshot',
-      OR:[{occurredAt:{gte:before,lt:until}},{occurredAt:null,receivedAt:{gte:before,lt:until}}],
-      DetectionMeasurement_rawIdRows:{some:{ruleVersion:RULE_VERSION,accepted:true}}},
-    select:{id:true,deviceId:true,bootId:true,uptimeMs:true,occurredAt:true,receivedAt:true,data:true},orderBy:{id:'asc'}
-  }):[];
+  // Separate disjoint clock branches so each can use its time-range index instead
+  // of scanning a device's entire history for an OR across two timestamp columns.
+  const where={deviceId:{in:deviceIds},workstationId,type:'sensor.detection_time_snapshot',
+    DetectionMeasurement_rawIdRows:{some:{ruleVersion:RULE_VERSION,accepted:true}}};
+  const select={id:true,deviceId:true,bootId:true,uptimeMs:true,occurredAt:true,receivedAt:true,data:true} as const;
+  const rows=deviceIds.length&&until>start?(await Promise.all([
+    db.rawEvent.findMany({where:{...where,occurredAt:{gte:before,lt:until}},select}),
+    db.rawEvent.findMany({where:{...where,occurredAt:null,receivedAt:{gte:before,lt:until}},select})
+  ])).flat().sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0):[];
   const cabinets=cabinetRecords(rows,start,end);
   const finished=cabinets.filter(c=>c.status==='completed'&&c.finishedAt&&Date.parse(c.finishedAt)>=start.getTime()&&Date.parse(c.finishedAt)<end.getTime());
   const inProgress=cabinets.filter(c=>c.status==='building'||c.status==='paused');

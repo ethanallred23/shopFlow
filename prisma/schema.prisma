@@ -151,6 +151,7 @@ model RawEvent {
   @@unique([deviceId, eventId])
   @@index([orgId, workstationId, receivedAt])
   @@index([deviceId, id])
+  @@index([deviceId, workstationId, type, occurredAt, receivedAt], map: "RawEvent_cabinet_receipt_idx")
   orgIdRef Organization @relation("RawEvent_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   deviceIdRef Device @relation("RawEvent_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   workstationIdRef Workstation? @relation("RawEvent_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)

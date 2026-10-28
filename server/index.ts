@@ -13,14 +13,19 @@ import {authorizeDevice,hash,HttpError,ingest,newToken} from './ingestion';
 import {asyncRoute,auth,owned,role} from './auth';
 import {dashboard} from './dashboard';
 import {cabinetProgress} from './cabinet-progress';
-import {shiftWindow} from './domain';
+import {heartbeatPace} from './heartbeat-pace';
 import {expireCommands,acknowledgeCommand} from './commands';
 export const app=express();
 const log=pino(); const updates=new EventEmitter();updates.setMaxListeners(1000);
 app.disable('x-powered-by');
 app.use(helmet());app.use(express.json({limit:'16kb'}));
 app.set('json replacer',(_key:string,value:unknown)=>typeof value==='bigint'?value.toString():value);
-app.use((req,res,next)=>{const start=Date.now();res.on('finish',()=>log.info({method:req.method,path:req.path,status:res.statusCode,ms:Date.now()-start},'request'));next();});
+app.use((req,res,next)=>{
+  const start=performance.now();
+  res.on('finish',()=>log.info({method:req.method,path:req.path,status:res.statusCode,ms:Math.round(performance.now()-start)},'request'));
+  res.on('close',()=>{if(!res.writableFinished)log.warn({method:req.method,path:req.path,ms:Math.round(performance.now()-start)},'request disconnected before response');});
+  next();
+});
 app.use('/api',rateLimit({windowMs:60000,limit:600,standardHeaders:'draft-7',legacyHeaders:false}));
 const cookie={httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict' as const,path:'/',maxAge:8*3600000};
 app.post('/api/login',rateLimit({windowMs:900000,limit:20}),asyncRoute(async(req,res)=>{
@@ -36,24 +41,21 @@ const bearer=(req:express.Request)=>{const value=req.headers.authorization;if(!v
 app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);updates.emit(result.orgId);const {orgId,...ack}=result;res.json(ack);}));
 app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
   const body=z.object({deviceId:z.string().uuid(),firmware:z.string().max(100).optional()}).strict().parse(req.body);
-  const result=await db.$transaction(async tx=>{const d=await authorizeDevice(tx,bearer(req));if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});return {orgId:d.orgId,workstationId:d.workstationId};});
-  let paceNeededMs=0;
-  if(result.workstationId){
-    const [org,station,shifts]=await Promise.all([
-      db.organization.findUniqueOrThrow({where:{id:result.orgId},select:{timezone:true}}),
-      db.workstation.findUniqueOrThrow({where:{id:result.workstationId}}),
-      db.shift.findMany({where:{orgId:result.orgId}})
-    ]);
-    const localNow=DateTime.now().setZone(org.timezone);
-    const shift=shifts.find(s=>{const m=localNow.hour*60+localNow.minute;return s.endMinute<=s.startMinute?m>=s.startMinute||m<s.endMinute:m>=s.startMinute&&m<s.endMinute;});
-    if(shift){
-      const date=shift.endMinute<=shift.startMinute&&localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}).toISODate()!:localNow.toISODate()!;
-      const window=shiftWindow(date,org.timezone,shift);
-      const progress=await cabinetProgress([body.deviceId],station.id,window.start,window.end,station.target,window.workingMs,window.elapsedMs);
-      paceNeededMs=progress.requiredMsPerCabinet;
-    }
-  }
-  updates.emit(result.orgId);res.json({ok:true,paceNeededMs});
+  const started=performance.now();
+  const report=(fields:Record<string,unknown>)=>log.info({deviceId:body.deviceId,...fields},'heartbeat timing');
+  const result=await db.$transaction(async tx=>{
+    const authStarted=performance.now();
+    const d=await authorizeDevice(tx,bearer(req));
+    report({stage:'authorize',ms:Math.round(performance.now()-authStarted)});
+    if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');
+    await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});
+    return {orgId:d.orgId,workstationId:d.workstationId};
+  });
+  report({stage:'heartbeat_commit',ms:Math.round(performance.now()-started)});
+  const paceNeededMs=await heartbeatPace({deviceId:body.deviceId,...result},report);
+  updates.emit(result.orgId);
+  res.json({ok:true,...(paceNeededMs===undefined?{}:{paceNeededMs})});
+  report({stage:'response',ms:Math.round(performance.now()-started),paceAvailable:paceNeededMs!==undefined});
 }));
 app.get('/api/v1/commands',asyncRoute(async(req,res)=>{
   const commands=await db.$transaction(async tx=>{
