@@ -5,7 +5,7 @@ const cabinetSchema=z.object({id:z.string().min(1).max(100),startedUptimeMs:z.nu
 export const eventSchema=z.discriminatedUnion('type',[
   base.extend({type:z.literal('sensor.state_changed'),data:z.object({detected:z.boolean()}).strict()}),
   base.extend({type:z.literal('cycle.completed'),data:z.object({durationMs:z.number().int().min(1).max(86400000)}).strict()}),
-  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100),cabinet:cabinetSchema.optional(),calibration:z.object({commandId:z.string().uuid(),offsetMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict().optional()}).strict()})
+  base.extend({type:z.literal('sensor.detection_time_snapshot'),data:z.object({detected:z.boolean(),totalDetectedMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),counterId:z.string().min(1).max(100),reason:z.enum(['periodic','transition']).optional(),cabinet:cabinetSchema.optional(),calibration:z.object({commandId:z.string().uuid(),offsetMs:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict().optional()}).strict()})
 ]).superRefine((event,ctx)=>{
   if(event.type==='sensor.detection_time_snapshot' && (event.data.totalDetectedMs-(event.data.calibration?.offsetMs??0)>event.uptimeMs || event.data.totalDetectedMs<(event.data.calibration?.offsetMs??0)))
     ctx.addIssue({code:z.ZodIssueCode.custom,path:['data','totalDetectedMs'],message:'Measured time above calibration cannot exceed uptime or be negative'});
@@ -17,6 +17,7 @@ export const eventSchema=z.discriminatedUnion('type',[
   }
 });
 export type Envelope=z.infer<typeof eventSchema>;
+export const refreshOnEvent=(event:Envelope)=>event.type!=='sensor.detection_time_snapshot'||event.data.reason!=='periodic';
 export interface State {sequence:number;detected:boolean|null;lastCountUptime:number|null;lastUptime:number}
 export function transition(state:State|undefined,e:Envelope,minInterval:number,retired=false){
   let next:State=state?{...state}:{sequence:-1,detected:null,lastCountUptime:null,lastUptime:0};

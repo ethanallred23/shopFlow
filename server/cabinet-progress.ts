@@ -9,7 +9,7 @@ export type CabinetProgress={
   timeline:Array<{at:string;actual:number;expected:number}>;cabinets:CabinetRecord[];
 };
 
-export async function cabinetProgress(deviceIds:string[]|null,workstationId:string,start:Date,end:Date,target:number,workingMs:number,elapsedMs:number):Promise<CabinetProgress>{
+export async function cabinetProgress(deviceIds:string[]|null,workstationId:string,start:Date,end:Date,target:number,workingMs:number,elapsedMs:number,includeOperators=true):Promise<CabinetProgress>{
   const until=new Date(Math.min(Date.now(),end.getTime()));
   const before=new Date(start.getTime()-24*60*60*1000);
   // Separate disjoint clock branches so each can use its time-range index instead
@@ -23,7 +23,7 @@ export async function cabinetProgress(deviceIds:string[]|null,workstationId:stri
   ])).flat().sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0):[];
   const records=cabinetRecords(rows,start,end);
   const earliest=new Date(Math.min(start.getTime(),...records.filter(c=>c.startedAt).map(c=>Date.parse(c.startedAt!))));
-  const periods=records.length?await db.operatorAssignment.findMany({where:{workstationId,startedAt:{lt:until},OR:[{endedAt:null},{endedAt:{gte:earliest}}]},orderBy:{startedAt:'desc'}}):[];
+  const periods=includeOperators&&records.length?await db.operatorAssignment.findMany({where:{workstationId,startedAt:{lt:until},OR:[{endedAt:null},{endedAt:{gte:earliest}}]},orderBy:{startedAt:'desc'}}):[];
   const cabinets=attributeCabinets(records,periods);
   const finished=cabinets.filter(c=>c.status==='completed'&&c.finishedAt&&Date.parse(c.finishedAt)>=start.getTime()&&Date.parse(c.finishedAt)<end.getTime());
   const inProgress=cabinets.filter(c=>c.status==='building'||c.status==='paused');

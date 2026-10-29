@@ -1,7 +1,7 @@
 import {Prisma,RawEvent} from '@prisma/client';
 import {createHash,randomBytes} from 'node:crypto';
 import {db} from './db';
-import {eventSchema,Envelope,transition} from './domain';
+import {eventSchema,Envelope,refreshOnEvent,transition} from './domain';
 import {processDetection} from './detection';
 export const RULE_VERSION=1;
 export const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
@@ -35,13 +35,14 @@ export async function processRaw(tx:Prisma.TransactionClient,raw:RawEvent,versio
 }
 export async function ingest(token:string,input:unknown){
   const e=eventSchema.parse(input);
+  const refresh=refreshOnEvent(e);
   return db.$transaction(async tx=>{
     const d=await authorizeDevice(tx,token);
     if(d.id!==e.deviceId)throw new HttpError(403,'deviceId does not match credential');
     const existing=await tx.rawEvent.findUnique({where:{deviceId_eventId:{deviceId:d.id,eventId:e.eventId}}});
     if(existing){
       const outcome=e.type==='sensor.detection_time_snapshot'?await tx.detectionMeasurement.findUnique({where:{rawId_ruleVersion:{rawId:existing.id,ruleVersion:RULE_VERSION}}}):null;
-      return {ok:true,duplicate:true,orgId:d.orgId,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
+      return {ok:true,duplicate:true,orgId:d.orgId,refresh:false,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
     }
     const caps=d.capabilities as string[];
     const capability=e.type==='sensor.detection_time_snapshot'?'detection_time':e.type==='cycle.completed'?'cycle':'count';
@@ -53,6 +54,6 @@ export async function ingest(token:string,input:unknown){
     await processRaw(tx,raw);
     await tx.device.update({where:{id:d.id},data:{lastEvent:receivedAt}});
     const outcome=e.type==='sensor.detection_time_snapshot'?await tx.detectionMeasurement.findUnique({where:{rawId_ruleVersion:{rawId:raw.id,ruleVersion:RULE_VERSION}}}):null;
-    return {ok:true,duplicate:false,orgId:d.orgId,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
+    return {ok:true,duplicate:false,orgId:d.orgId,refresh,...(outcome?{measurementAccepted:outcome.accepted,notice:outcome.notice}:{})};
   },{isolationLevel:Prisma.TransactionIsolationLevel.ReadCommitted,maxWait:10000,timeout:10000});
 }

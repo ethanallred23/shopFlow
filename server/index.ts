@@ -42,7 +42,7 @@ app.post('/api/login',rateLimit({windowMs:900000,limit:20}),asyncRoute(async(req
   res.cookie('sf_session',token,cookie).json({ok:true});
 }));
 const bearer=(req:express.Request)=>{const value=req.headers.authorization;if(!value?.startsWith('Bearer ')||value.length>200)throw new HttpError(401,'Device token required');return value.slice(7);};
-app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);updates.emit(result.orgId);const {orgId,...ack}=result;res.json(ack);}));
+app.post('/api/v1/events',asyncRoute(async(req,res)=>{const result=await ingest(bearer(req),req.body);if(result.refresh)updates.emit(result.orgId);const {orgId,refresh,...ack}=result;res.json(ack);}));
 app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
   const body=z.object({deviceId:z.string().uuid(),firmware:z.string().max(100).optional()}).strict().parse(req.body);
   const started=performance.now();
@@ -52,12 +52,13 @@ app.post('/api/v1/heartbeat',asyncRoute(async(req,res)=>{
     const d=await authorizeDevice(tx,bearer(req));
     report({stage:'authorize',ms:Math.round(performance.now()-authStarted)});
     if(body.deviceId!==d.id)throw new HttpError(403,'Device mismatch');
+    const reconnected=!d.lastHeartbeat||Date.now()-d.lastHeartbeat.getTime()>=90000;
     await tx.device.update({where:{id:d.id},data:{lastHeartbeat:new Date(),firmware:body.firmware}});
-    return {orgId:d.orgId,workstationId:d.workstationId};
+    return {orgId:d.orgId,workstationId:d.workstationId,reconnected};
   });
   report({stage:'heartbeat_commit',ms:Math.round(performance.now()-started)});
   const paceNeededMs=await heartbeatPace({deviceId:body.deviceId,...result},report);
-  updates.emit(result.orgId);
+  if(result.reconnected)updates.emit(result.orgId);
   res.json({ok:true,...(paceNeededMs===undefined?{}:{paceNeededMs})});
   report({stage:'response',ms:Math.round(performance.now()-started),paceAvailable:paceNeededMs!==undefined});
 }));

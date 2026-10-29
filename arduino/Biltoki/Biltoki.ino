@@ -71,8 +71,8 @@ TM1637Display display(DISPLAY_CLK, DISPLAY_DIO);
 constexpr uint64_t MAX_TOTAL = 9007199254740991ULL;
 constexpr size_t HISTORY_SIZE = 128;
 constexpr size_t HTTP_BODY_LIMIT = 16384;
-constexpr uint32_t SNAPSHOT_INTERVAL = 5000;
-constexpr uint32_t POLL_INTERVAL = 3000;
+constexpr uint32_t SNAPSHOT_INTERVAL = 15000;
+constexpr uint32_t POLL_INTERVAL = 5000;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint32_t BUZZER_BEEP_MS = 350;
 constexpr uint32_t BUZZER_GAP_MS = 180;
@@ -89,6 +89,7 @@ struct Snapshot {
   char cabinetId[33];
   uint64_t cabinetStarted, cabinetFinished, cabinetElapsed;
   bool cabinetRunning;
+  bool boundary;
 };
 struct TimerCommand {
   char id[37];
@@ -172,7 +173,7 @@ uint64_t uptimeMs();
 int64_t utcMs();
 bool clockReady();
 void makeRandomId(char *out);
-bool queueSnapshot(bool detected, uint64_t sampledAt);
+bool queueSnapshot(bool detected, uint64_t sampledAt, bool boundary);
 void advanceTimer(uint64_t now);
 void serviceTimerCommand(uint64_t now, bool detected);
 bool validUuid(const char *text);
@@ -208,7 +209,7 @@ void makeRandomId(char *out) {
            (unsigned long)esp_random(), (unsigned long)esp_random());
 }
 
-bool queueSnapshot(bool detected, uint64_t sampledAt) {
+bool queueSnapshot(bool detected, uint64_t sampledAt, bool boundary) {
   if (!snapshotQueue || uxQueueSpacesAvailable(snapshotQueue) == 0 ||
       sequenceNumber > 2147483647UL) return false;
   Snapshot sample = {};
@@ -223,6 +224,7 @@ bool queueSnapshot(bool detected, uint64_t sampledAt) {
   sample.cabinetFinished = cabinetFinished;
   sample.cabinetElapsed = cabinetElapsed;
   sample.cabinetRunning = detected && !timerPaused;
+  sample.boundary = boundary;
   strcpy(sample.counter, counterId);
   timeval tv;
   gettimeofday(&tv, nullptr);
@@ -272,7 +274,7 @@ void serviceTimerCommand(uint64_t now, bool detected) {
       return; // Continue hardware sampling; network task drains the old queue.
     } else {
       if (replacesCounter) {
-        queueSnapshot(detected, now); // Final old-counter total: preserves its tail.
+        queueSnapshot(detected, now, true); // Final old-counter total: preserves its tail.
         totalMs = waitingCommand.action == RESET_TIMER ? 0 : waitingCommand.value;
         calibrationOffset = totalMs;
         if (waitingCommand.action == SET_TOTAL) strcpy(calibrationCommandId, waitingCommand.id);
@@ -282,7 +284,7 @@ void serviceTimerCommand(uint64_t now, bool detected) {
         timerPaused = waitingCommand.action == PAUSE_TIMER;
         startBeeps(timerPaused ? 2 : 1, now);
       }
-      queueSnapshot(detected, now); // Immediately capture the applied state/baseline.
+      queueSnapshot(detected, now, true); // Immediately capture the applied state/baseline.
       lastSnapshot = now;
       result.applied = true;
       result.total = totalMs;
@@ -383,6 +385,7 @@ String snapshotBody(const Snapshot &sample) {
   doc["data"]["detected"] = sample.detected; // Latched build state, even when remotely paused.
   doc["data"]["totalDetectedMs"] = sample.total;
   doc["data"]["counterId"] = sample.counter;
+  doc["data"]["reason"] = sample.boundary ? "transition" : "periodic";
   if (sample.cabinetId[0]) {
     JsonObject cabinet = doc["data"]["cabinet"].to<JsonObject>();
     cabinet["id"] = sample.cabinetId;
@@ -658,7 +661,7 @@ void networkTask(void *parameter) {
       path = "/api/v1/heartbeat";
       JsonDocument doc;
       doc["deviceId"] = DEVICE_ID;
-      doc["firmware"] = "bultoki-buttons-2.0";
+      doc["firmware"] = "bultoki-buttons-2.1";
       serializeJson(doc, body);
       retry = &heartbeatRetry;
     } else if (selected == 1) {
@@ -782,7 +785,7 @@ void localAction(uint8_t action, uint64_t now) {
     startBeeps(1, now);
   }
   // This loop is the only producer, and capacity was checked before mutation.
-  if (!queueSnapshot(buildActive, now)) hardwareError = true;
+  if (!queueSnapshot(buildActive, now, true)) hardwareError = true;
   lastSnapshot = now;
 }
 
@@ -812,7 +815,7 @@ void setup() {
     Serial.println("Queue allocation failed; restart required.");
     return;
   }
-  queueSnapshot(false, previousTime);
+  queueSnapshot(false, previousTime, true);
   if (xTaskCreate(networkTask, "ShopFlowNetwork", 16384, nullptr, 1, nullptr) != pdPASS) {
     hardwareError = true;
     Serial.println("Network task creation failed; restart required.");
@@ -846,11 +849,12 @@ void loop() {
     digitalWrite(BUZZER_PIN, HIGH);
   }
 
-  // Periodic readings may be skipped while offline. Cumulative totals remain
-  // local; eight slots are protected for actions and cabinet boundaries.
+  // Keep at most one queued routine sample. Button and remote transitions keep
+  // their own ordered snapshots and never wait behind a backlog of routine ones.
   if (snapshotQueue && now - lastSnapshot >= SNAPSHOT_INTERVAL &&
+      uxQueueMessagesWaiting(snapshotQueue) == 0 &&
       uxQueueSpacesAvailable(snapshotQueue) > 8 && sequenceNumber < 2147483639UL) {
-    if (queueSnapshot(buildActive, now)) lastSnapshot = now;
+    if (queueSnapshot(buildActive, now, false)) lastSnapshot = now;
   }
   if (snapshotQueue) queueError = uxQueueSpacesAvailable(snapshotQueue) <= 8 ||
                                   sequenceNumber >= 2147483639UL;

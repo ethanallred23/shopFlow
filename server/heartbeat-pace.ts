@@ -22,7 +22,7 @@ async function calculate(context:Context,report:Report){
   const date=shift.endMinute<=shift.startMinute&&localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}).toISODate()!:localNow.toISODate()!;
   const window=shiftWindow(date,org.timezone,shift);
   const queryStarted=performance.now();
-  const progress=await cabinetProgress([context.deviceId],station.id,window.start,window.end,station.target,window.workingMs,window.elapsedMs);
+  const progress=await cabinetProgress([context.deviceId],station.id,window.start,window.end,station.target,window.workingMs,window.elapsedMs,false);
   report({stage:'pace_history',ms:Math.round(performance.now()-queryStarted),cabinets:progress.cabinets.length});
   return progress.requiredMsPerCabinet;
 }

@@ -21,11 +21,11 @@
 
 Start begins a new cabinet while idle and resumes one while paused. Pause stops accumulation. Complete ends the active cabinet with one press. Buttons debounce for 40 ms and require a stable release between presses. The yellow LED shows whether time is counting. The blue LED shows Wi-Fi association only; it does not indicate API reachability. The display shows the site's pace countdown when available and elapsed cabinet time otherwise.
 
-The device keeps the cumulative and current cabinet timers during a Wi-Fi outage. Snapshots waiting to upload are stored in finite RAM and are lost on power loss. A full queue can refuse new button actions until it drains. Reboot starts idle.
+The device keeps the cumulative and current cabinet timers during a Wi-Fi outage. It sends routine snapshots every 15 seconds while the network queue has room and no older snapshots are waiting. A Start, Pause, Complete, or remote timer change creates its own ordered snapshot immediately. The device polls for remote commands every 5 seconds and sends a heartbeat every 30 seconds. Snapshots waiting to upload are stored in finite RAM and are lost on power loss. A full queue can refuse new button actions until it drains. Reboot starts idle. The site shows a bounded estimate between snapshots; the completion duration comes from the device.
 
 ## Site integration
 
-The sketch sends `/api/v1/heartbeat` and `/api/v1/events`, polls `/api/v1/commands`, and acknowledges each command at `/api/v1/commands/:id/ack`. Remote pause, resume, reset, and set-total commands are supported. Reset and set-total affect the cumulative counter, not the active cabinet's elapsed time. Cabinet snapshots include a stable cabinet ID, measured duration, and running/completed state. See [the timer contract](../../docs/DETECTION_TIME.md).
+The sketch sends `/api/v1/heartbeat` and `/api/v1/events`, polls `/api/v1/commands`, and acknowledges each command at `/api/v1/commands/:id/ack`. Remote pause, resume, reset, and set-total commands are supported. Reset and set-total affect the cumulative counter, not the active cabinet's elapsed time. Cabinet snapshots include a stable cabinet ID, measured duration, running/completed state, and a `data.reason` of `periodic` or `transition`. The site uses that reason to skip a full dashboard refresh for routine samples while refreshing promptly for button and remote changes. Deploy the updated site before uploading this sketch; older sketches remain accepted. See [the timer contract](../../docs/DETECTION_TIME.md).
 
 ## Red LED and HTTP diagnostics
 

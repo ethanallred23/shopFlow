@@ -1,6 +1,6 @@
 # Implemented Arduino detection-time contract
 
-The Biltoki target uses D8 for the sensor, D2 for its detection LED, and TM1637 CLK/DIO on D4/D5. Biltoki uses hand scans as a start/stop toggle, debouncing both detection and release for 100 ms. Its accumulated timer and snapshots use the latched build state; detected does not represent raw hand presence. The D9 active buzzer beeps for 350 ms on each start/stop hand toggle and remote counting-state change. The D2 yellow LED follows counting, not raw sensor presence. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
+The Biltoki target is the three-button Arduino Nano ESP32 sketch in `arduino/Biltoki/Biltoki.ino`. Start, Pause, and Complete are on D7, D8, and D9; yellow counting, blue Wi-Fi, and red error LEDs are on D2, D3, and D4; TM1637 CLK/DIO are on D5/D6. Buttons are active LOW and debounced for 40 ms. The D10 optional buzzer is disabled by default. The old repository `ShopFlowSensor.ino` is a **part-counting example**, not this timer firmware.
 
 ## Connection and provisioning
 
@@ -33,7 +33,8 @@ Content-Type: application/json
   "data": {
     "detected": true,
     "totalDetectedMs": 125000,
-    "counterId": "counter-a-7f63"
+    "counterId": "counter-a-7f63",
+    "reason": "periodic"
   }
 }
 ```
@@ -44,7 +45,7 @@ A reconnect changes none of these identifiers. A restart uses new bootId and cou
 
 `occurredAt` is required: UTC ISO ending Z or null. Preserve the timestamp through retries; use null for samples captured before clock sync. `delivery` is live/buffered/unknown (optional, default unknown). Queued events use buffered. Never replace an old sample timestamp with reconnect time. More than five minutes in the future is rejected. Receipt-time estimates do not qualify detection intervals for shifts.
 
-Send snapshots every **5–10 seconds and on transitions**, plus separate 30-second heartbeats. Keep accumulation/display independent of blocking network operations. Use a bounded queue and report overflow. Later cumulative snapshots recover missed intermediate totals, but not their detailed timing. Time accumulated after the last recoverable snapshot is lost if power loss resets the device and destroys its buffer.
+The current Biltoki sketch sends routine snapshots every **15 seconds when no earlier snapshots are queued**, plus immediate ordered snapshots for button and remote timer transitions and separate 30-second heartbeats. It polls remote commands every 5 seconds. `data.reason` is optional for older firmware; current Biltoki sends `periodic` or `transition`. The API accepts both. Routine snapshots are persisted but do not trigger an immediate full dashboard refresh; transitions do. Keep accumulation/display independent of blocking network operations. Use a bounded queue and report overflow. Later cumulative snapshots recover missed intermediate totals, but not their detailed timing. Time accumulated after the last recoverable snapshot is lost if power loss resets the device and destroys its buffer.
 
 ## Accounting actually implemented
 
@@ -55,19 +56,19 @@ Send snapshots every **5–10 seconds and on transitions**, plus separate 30-sec
 - A new counter starts a separate total; all-counter recovered time never resets. Do not reuse retired counter IDs. A previously unseen boot with an older known timestamp is excluded. When timestamps are absent, order between unseen boots cannot be proven: drain old-boot queues before publishing a new boot and send requests in order, one in flight. Known retired boots are excluded.
 - Clock corrections do not discard monotonic totals within a counter, but can make intervals unallocatable. Timestamp elapsed time must agree with monotonic uptime within 2 seconds to qualify for placement. This is not proof of device clock accuracy.
 - A delta enters a selected shift/day only when consecutive accepted snapshots have valid device times, consistent clocks, the same assignment, and the entire interval lies inside that window. Boundary-spanning deltas are shown as uncertain and excluded; no uniform distribution is invented. First snapshots, unknown clocks and changed assignments are unallocated. All-time device totals explicitly include previous assignments/counters.
-- Detected/absent is from the latest accepted snapshot. Both sample time and receipt must be within 30 seconds to show Current. Old buffered or unknown-time snapshots are labeled stale/last reported. Connectivity independently uses the 90-second heartbeat threshold. The UI does not extrapolate elapsed time between snapshots.
+- Detected/absent is from the latest accepted snapshot. Both sample time and receipt must be within 30 seconds to show Current. Old buffered or unknown-time snapshots are labeled stale/last reported. Connectivity independently uses the 90-second heartbeat threshold. The build-time display estimates forward by at most 30 seconds between fresh running snapshots; confirmed records and totals use device measurements.
 
 ## Biltoki cabinet progress
 
-For a timer-only workstation, the site derives cabinet progress and a cabinet log from accepted snapshots. One hand swipe starts a build immediately. A short subsequent swipe pauses or resumes it; holding the hand over the sensor for three seconds completes it, with no five-second minimum. Pauses retain the cabinet ID and do not count as completions. Starting adds a numbered log entry, while completed/remaining/pace metrics count only finished cabinets. Visible numbering starts at 1 for the selected shift/day; durable identity is device + boot + cabinet ID. Time-of-day fields use the organization's timezone in the UI. Buzzer feedback is one beep for start/resume, two for pause, and three for completion.
+For a timer-only workstation, the site derives cabinet progress and a cabinet log from accepted snapshots. Start begins a new cabinet or resumes a paused one, Pause stops accumulation, and Complete ends the active cabinet with one press. A new cabinet gets a stable ID; its duration excludes local and remote pauses. Finished cabinets drive completed/remaining/pace metrics. The browser estimates a running display between fresh snapshots, while recorded durations remain device-measured.
 
-Biltoki firmware `biltoki-gestures-1.5` adds an optional `data.cabinet` object:
+Current Biltoki firmware sends an optional `data.cabinet` object:
 
 ```json
 {"id":"random-cabinet-id","startedUptimeMs":1000,"finishedUptimeMs":null,"elapsedMs":12000,"running":true}
 ```
 
-The start uptime and ID remain fixed for that cabinet. Finish uptime is null until the completion double swipe. Elapsed milliseconds are measured independently of the cumulative counter and exclude local and remote pauses; reset/set-total do not reset cabinet duration. `detected` means the build remains active, including a remote pause; `running` means it is currently counting. Repeated snapshots update the same record. The device retains the completed metadata until the next start, allowing a later snapshot to recover a missed start or finish. Deploy the API update before uploading this firmware; older firmware remains accepted without this optional object.
+The start uptime and ID remain fixed for that cabinet. Finish uptime is null until the Complete button is pressed. Elapsed milliseconds are measured independently of the cumulative counter and exclude local and remote pauses; reset/set-total do not reset cabinet duration. `detected` means the build remains active, including a remote pause; `running` means it is currently counting. Repeated snapshots update the same record. The device retains completed metadata until the next start, allowing a later snapshot to recover a missed start or finish. Deploy the API update before uploading this firmware; older firmware remains accepted without optional reason or cabinet metadata.
 
 Start/finish wall times are reconstructed from snapshot UTC and uptime. Unknown clocks display unavailable times, never guessed times. Duration is never extrapolated while offline. A newly observed boot or cabinet marks the previous unfinished cabinet interrupted rather than completed. Historical firmware without cabinet metadata is reconstructed from accepted state transitions and cumulative deltas. Snapshots are retained in RawEvent, so the log needs no new database table or migration. Rejected measurements are excluded. Builds overlapping the selected period remain visible with their original start time; summary build-time totals conservatively exclude builds starting before that period. The 24-hour lookback supports historical transition reconstruction; new metadata can reconstruct an older start from a snapshot in the window.
 
