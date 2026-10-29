@@ -57,11 +57,15 @@ npm run admin:create
 
 5. Switch to runtime credentials and run `npm run db:check`. Only after setup, administrator creation and the connection check succeed, start the app with `npm start` under your service supervisor. Configure a same-host reverse proxy with a valid HTTPS certificate for the browser site; `APP_ORIGIN` must match it. The existing Arduino-only LAN proxy does not publish the browser UI. Verify HTTPS sign-in, then configure shops, workstations and shifts in Settings. No shift times are assumed during production bootstrap.
 
+Express trusts forwarded client addresses only from loopback proxies. Configure the same-host proxy to append the actual client address to `X-Forwarded-For` or overwrite the header with it, and keep the application bound to loopback. If another proxy sits in front of it, configure that proxy chain deliberately; trusting loopback alone may identify the upstream proxy instead of individual clients.
+
 ## Subsequent updates and failures
 
 Use one deployment operator/job at a time. Stage the new release separately, install its dependencies, take and verify a fresh backup, and schedule maintenance for changes that may lock tables. Run `npm run setup:production` with the database-scoped deployment account. Only after migration/build succeeds, switch the service to the new release and restart with runtime credentials. Check logs, HTTPS sign-in and dashboard access. Do not rerun `admin:create` for updates.
 
 The user-to-workstation assignment feature requires migration `20261029000000_user_workstation` before starting the new application. Administrators can create accounts and assign each person to a station in Settings. Assignments identify the current team at a station; they do not retroactively attribute individual cabinet records to a person.
+
+The department roster also requires `20261029010000_user_department`. It copies the department from each existing user's assigned workstation; users without a station remain without a department until an administrator assigns one. Administrators manage departments under Settings; supervisors and administrators can assign department members from the workstation page. Changing a user's department clears the current workstation assignment.
 
 The command fails immediately at the first unsuccessful step and does not restart the server. Successfully applied migrations remain applied if a later build fails; MySQL DDL is not an all-or-nothing transaction. Fix the failure, then rerun setup. Never use `migrate reset`, `db push --force-reset`, or `migrate dev` on production. Review failed migration state before using Prisma's manual recovery tools; do not mark a partially applied migration complete blindly.
 

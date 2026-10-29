@@ -38,6 +38,7 @@ model Area {
   orgIdRef Organization @relation("Area_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   shopIdRef Shop @relation("Area_shopId", fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   Workstation_areaIdRows Workstation[] @relation("Workstation_areaId")
+  User_areaIdRows User[] @relation("User_areaId")
 }
 model Workstation {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -77,10 +78,13 @@ model User {
   name String
   passwordHash String
   role String @default("viewer")
+  areaId String? @db.VarChar(36)
   workstationId String? @db.VarChar(36)
   @@index([orgId])
   @@index([workstationId])
+  @@index([areaId])
   orgIdRef Organization @relation("User_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  areaIdRef Area? @relation("User_areaId", fields: [areaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   workstationIdRef Workstation? @relation("User_workstationId", fields: [workstationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   Session_userIdRows Session[] @relation("Session_userId")
 }

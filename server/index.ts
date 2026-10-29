@@ -18,6 +18,9 @@ import {expireCommands,acknowledgeCommand} from './commands';
 export const app=express();
 const log=pino(); const updates=new EventEmitter();updates.setMaxListeners(1000);
 app.disable('x-powered-by');
+// Production terminates HTTPS at a same-host reverse proxy. Trust only local
+// proxy addresses so an external client cannot supply its own rate-limit IP.
+app.set('trust proxy','loopback');
 app.use(helmet());app.use(express.json({limit:'16kb'}));
 app.set('json replacer',(_key:string,value:unknown)=>typeof value==='bigint'?value.toString():value);
 app.use((req,res,next)=>{
@@ -109,6 +112,18 @@ app.get('/api/devices/:id/commands/:commandId',role('supervisor'),asyncRoute(asy
 app.get('/api/devices/:id/events',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);const cursor=z.string().regex(/^\d+$/).optional().parse(req.query.cursor);res.json(await db.rawEvent.findMany({where:{deviceId:req.params.id,orgId:req.auth!.orgId,...(cursor?{id:{lt:BigInt(cursor)}}:{})},orderBy:{id:'desc'},take:50}));}));
 app.get('/api/devices/:id/assignments',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.assignment.findMany({where:{deviceId:req.params.id},orderBy:{startedAt:'desc'},take:100}));}));
 app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),target:z.number().int().min(0).max(10000000).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
+app.get('/api/workstations/:id/people',role('supervisor'),asyncRoute(async(req,res)=>{
+  const station=await owned('workstation',req.params.id,req.auth!.orgId);
+  const people=await db.user.findMany({where:{orgId:req.auth!.orgId,areaId:station.areaId},select:{id:true,name:true,workstationId:true},orderBy:{name:'asc'}});
+  res.json(people);
+}));
+app.put('/api/workstations/:id/people/:userId',role('supervisor'),asyncRoute(async(req,res)=>{
+  const station=await owned('workstation',req.params.id,req.auth!.orgId);
+  const {assigned}=z.object({assigned:z.boolean()}).strict().parse(req.body);
+  const result=await db.user.updateMany({where:{id:req.params.userId,orgId:req.auth!.orgId,areaId:station.areaId,...(!assigned?{workstationId:station.id}:{})},data:{workstationId:assigned?station.id:null}});
+  if(!result.count)throw new HttpError(409,assigned?'User is not in this department':'User is not assigned to this workstation');
+  updates.emit(req.auth!.orgId);res.json({ok:true});
+}));
 app.post('/api/dev/workstations/:id/cabinets/complete',role('admin'),asyncRoute(async(req,res)=>{
   const workstation=await owned('workstation',req.params.id,req.auth!.orgId);
   const org=await db.organization.findUniqueOrThrow({where:{id:req.auth!.orgId},select:{demo:true}});
@@ -134,10 +149,22 @@ app.put('/api/dev/workstations/:id/cabinets/progress',role('admin'),asyncRoute(a
 }));
 app.post('/api/workstations/:id/notes',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({text:z.string().min(1).max(2000),reason:z.enum(['Material shortage','Changeover','Maintenance','Quality check','Other']).nullable(),minutes:z.number().int().min(0).max(1440).nullable()}).parse(req.body);res.json(await db.note.create({data:{...data,orgId:req.auth!.orgId,workstationId:req.params.id,author:req.auth!.name}}));updates.emit(req.auth!.orgId);}));
 app.get('/api/reports.csv',asyncRoute(async(req,res)=>{const data=await dashboard(req.auth!.orgId,req.query);const escape=(s:unknown)=>'"'+String(s??'Unavailable').replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"','""')+'"';res.set({'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="shopflow-report.csv"'}).send([['Date','Period','Workstation','Product filter','Recorded output','Scheduled target','Expected so far','Median cycle ms','P90 cycle ms','Data status'],...data.stations.map(s=>[data.date,req.query.period==='day'?'Calendar day':data.shifts.find(x=>x.id===data.shiftId)?.name,s.name,req.query.product??'All',s.count,s.target,s.expected,s.median,s.p90,s.status])].map(row=>row.map(escape).join(',')).join('\r\n'));}));
-app.get('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const [users,workstations]=await Promise.all([db.user.findMany({where:{orgId:req.auth!.orgId},select:{id:true,email:true,name:true,role:true,workstationId:true}}),db.workstation.findMany({where:{orgId:req.auth!.orgId},select:{id:true,name:true},orderBy:{name:'asc'}})]);res.json({users,workstations});}));
+app.get('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const [users,workstations]=await Promise.all([db.user.findMany({where:{orgId:req.auth!.orgId},select:{id:true,email:true,name:true,role:true,areaId:true,workstationId:true}}),db.workstation.findMany({where:{orgId:req.auth!.orgId},select:{id:true,name:true,areaId:true},orderBy:{name:'asc'}})]);res.json({users,workstations});}));
 app.patch('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const {timezone}=z.object({timezone:z.string().refine(v=>DateTime.now().setZone(v).isValid,'Invalid timezone')}).parse(req.body);res.json(await db.organization.update({where:{id:req.auth!.orgId},data:{timezone}}));}));
-app.post('/api/settings/users',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({name:z.string().min(1).max(100),email:z.string().email(),password:z.string().min(12).max(128),role:z.enum(['admin','supervisor','viewer'])}).parse(req.body);const {password,...rest}=data;const user=await db.user.create({data:{...rest,email:rest.email.toLowerCase(),orgId:req.auth!.orgId,passwordHash:await bcrypt.hash(password,12)}});res.json({id:user.id});}));
-app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({role:z.enum(['admin','supervisor','viewer']).optional(),workstationId:z.string().uuid().nullable().optional()}).strict().refine(v=>v.role!==undefined||v.workstationId!==undefined,'Provide a role or workstation').parse(req.body);if(data.role!==undefined&&req.params.id===req.auth!.id)throw new HttpError(400,'Ask another administrator to change your role');if(data.workstationId)await owned('workstation',data.workstationId,req.auth!.orgId);const result=await db.user.updateMany({where:{id:req.params.id,orgId:req.auth!.orgId},data});if(!result.count)throw new HttpError(404,'User not found');updates.emit(req.auth!.orgId);res.json({ok:true});}));
+app.post('/api/settings/users',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({name:z.string().min(1).max(100),email:z.string().email(),password:z.string().min(12).max(128),role:z.enum(['admin','supervisor','viewer']),areaId:z.string().uuid().nullable().optional()}).strict().parse(req.body);if(data.areaId)await owned('area',data.areaId,req.auth!.orgId);const {password,...rest}=data;const user=await db.user.create({data:{...rest,email:rest.email.toLowerCase(),orgId:req.auth!.orgId,passwordHash:await bcrypt.hash(password,12)}});res.json({id:user.id});}));
+app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
+  const data=z.object({role:z.enum(['admin','supervisor','viewer']).optional(),areaId:z.string().uuid().nullable().optional(),workstationId:z.string().uuid().nullable().optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
+  if(data.role!==undefined&&req.params.id===req.auth!.id)throw new HttpError(400,'Ask another administrator to change your role');
+  const user=await db.user.findFirst({where:{id:req.params.id,orgId:req.auth!.orgId},select:{areaId:true,workstationId:true}});
+  if(!user)throw new HttpError(404,'User not found');
+  if(data.areaId)await owned('area',data.areaId,req.auth!.orgId);
+  const nextArea=data.areaId===undefined?user.areaId:data.areaId;
+  if(data.workstationId){const station=await owned('workstation',data.workstationId,req.auth!.orgId);if(station.areaId!==nextArea)throw new HttpError(400,'Workstation must be in the user department');}
+  if(data.areaId!==undefined&&data.areaId!==user.areaId&&data.workstationId===undefined)data.workstationId=null;
+  const result=await db.user.updateMany({where:{id:req.params.id,orgId:req.auth!.orgId,areaId:user.areaId,workstationId:user.workstationId},data});
+  if(!result.count)throw new HttpError(409,'User assignment changed; refresh and try again');
+  updates.emit(req.auth!.orgId);res.json({ok:true});
+}));
 app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({kind:z.enum(['shop','area','workstation']),name:z.string().min(1).max(100),parentId:z.string().uuid().optional()}).parse(req.body);const orgId=req.auth!.orgId;if(data.kind==='shop')res.json(await db.shop.create({data:{orgId,name:data.name}}));else {if(!data.parentId)throw new HttpError(400,'Parent required');await owned(data.kind==='area'?'shop':'area',data.parentId,orgId);res.json(data.kind==='area'?await db.area.create({data:{orgId,name:data.name,shopId:data.parentId}}):await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId}}));}}));
 app.post('/api/settings/shifts',role('admin'),asyncRoute(async(req,res)=>{
   const data=z.object({id:z.string().uuid().optional(),name:z.string().min(1).max(100),startMinute:z.number().int().min(0).max(1439),endMinute:z.number().int().min(0).max(1439),breaks:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(1)})).max(20)}).parse(req.body);
