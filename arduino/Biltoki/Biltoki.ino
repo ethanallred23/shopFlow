@@ -1,3 +1,22 @@
+/*
+BULTOKI V2 — three-button build timer
+Open as BultokiV2/BultokiV2.ino; copy your existing secrets.h into that folder.
+Board: Arduino Nano ESP32. Libraries: ArduinoJson 7 and TM1637Display.
+secrets.h must define WIFI_SSID, WIFI_PASSWORD, DEVICE_ID, DEVICE_TOKEN,
+API_BASE and ROOT_CA. Keep the existing validated CA and private credentials.
+Serial Monitor: 9600 baud. Buttons are normally-open, momentary, active LOW.
+Start: new cabinet or resume. Pause: stop accumulation. Complete: finish once.
+Complete is a single press, not the old three-second sensor gesture.
+Display: ShopFlow pace countdown; elapsed cabinet time when no pace is available.
+Counters and unsent RAM snapshots reset on physical restart/power loss.
+Wi-Fi outages do not reset counters. Offline RAM storage is finite; reconnect
+if red LED/Serial reports a full queue. No new cabinets start without capacity.
+Remote reset/calibration changes the cumulative total, not cabinet elapsed time.
+Buzzer disabled by default; optional driver control is D10.
+Remove the old sensor/transistor connections; do not reuse their wiring for buttons.
+See the pin constants below for the complete new wiring map.
+*/
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <TM1637Display.h>
@@ -17,12 +36,24 @@
 #include <freertos/queue.h>
 #include "secrets.h"
 
-const int SENSOR_PIN = D8;
-const int LED_PIN = D2;
-const int WIFI_LED_PIN = D6;   // Blue LED: pin -> 220 ohm -> anode; cathode -> GND.
-const int ERROR_LED_PIN = D7;  // Red LED: its own 220 ohm resistor, cathode -> GND.
-const int BUZZER_PIN = D9;     // Active buzzer: pin -> 220 ohm -> positive; negative -> GND.
+// Bultoki V2 — Arduino Nano ESP32. Reuse your existing secrets.h.
+// Three normally-open MOMENTARY buttons: each between its pin and GND.
+// Each LED: pin -> its own 220 ohm resistor -> anode; cathode -> GND.
+// TM1637: VCC -> 3.3V, GND -> GND. Do not pull GPIO signals up to 5V.
+const int LED_PIN = D2;        // Yellow: timer actually counting
+const int WIFI_LED_PIN = D3;   // Blue: Wi-Fi association, NOT proof of API success
+const int ERROR_LED_PIN = D4;  // Red: see Serial Monitor at 9600 for cause
+const int DISPLAY_CLK = D5;
+const int DISPLAY_DIO = D6;
+const int START_PIN = D7;
+const int PAUSE_PIN = D8;
+const int COMPLETE_PIN = D9;
+const int BUZZER_PIN = D10;    // Optional driver input; no longer D9
+constexpr bool ENABLE_BUZZER = false; // Enable only with a suitable buzzer driver.
 
+// RAM-only history survives Wi-Fi loss, not power loss. Critical transitions
+// reserve queue capacity. If offline storage is exhausted, a new action is
+// refused rather than silently losing a finished cabinet. Reconnect to drain it.
 // Network task publishes flags; only the hardware loop drives the status LEDs.
 enum ErrorFlag : uint32_t {
   CONFIG_ERROR = 1 << 0, WIFI_ERROR = 1 << 1, CLOCK_ERROR = 1 << 2,
@@ -36,16 +67,16 @@ bool queueError = false;
 std::atomic<bool> commandError{false};
 
 
-TM1637Display display(D4, D5); // CLK, DIO
+TM1637Display display(DISPLAY_CLK, DISPLAY_DIO);
 constexpr uint64_t MAX_TOTAL = 9007199254740991ULL;
 constexpr size_t HISTORY_SIZE = 128;
 constexpr size_t HTTP_BODY_LIMIT = 16384;
 constexpr uint32_t SNAPSHOT_INTERVAL = 5000;
 constexpr uint32_t POLL_INTERVAL = 3000;
-constexpr uint32_t SCAN_DEBOUNCE_MS = 100;
+constexpr uint32_t BUTTON_DEBOUNCE_MS = 40;
 constexpr uint32_t BUZZER_BEEP_MS = 350;
 constexpr uint32_t BUZZER_GAP_MS = 180;
-constexpr uint32_t COMPLETE_HOLD_MS = 3000;
+
 
 enum Action : uint8_t { PAUSE_TIMER, RESUME_TIMER, RESET_TIMER, SET_TOTAL };
 struct Snapshot {
@@ -89,6 +120,7 @@ struct HttpResult {
 QueueHandle_t snapshotQueue = nullptr;
 QueueHandle_t commandQueue = nullptr;
 QueueHandle_t resultQueue = nullptr;
+QueueHandle_t paceQueue = nullptr; // Network publishes; hardware owns paceNeededMs.
 char bootId[33]; // Immutable after setup; safe for both tasks to read.
 
 // Only setup()/loop() access these variables.
@@ -99,12 +131,29 @@ uint32_t sequenceNumber = 0;
 char counterId[33];
 char calibrationCommandId[37] = {};
 uint64_t calibrationOffset = 0;
-bool buildActive = false, rawDetected = false, candidateDetected = false, timerPaused = false, snapshotNeeded = false;
-uint64_t candidateSince = 0;
-bool scanArmed = false;
-bool gestureActive = false;
-uint64_t gestureStartedAt = 0;
-bool completionTriggered = false;
+bool buildActive = false, timerPaused = false;
+uint64_t uptimeMs();
+struct Button {
+  int pin;
+  bool candidate = true, stable = true, armed = false;
+  uint64_t changedAt = 0;
+  explicit Button(int p) : pin(p) {}
+  void begin() {
+    pinMode(pin, INPUT_PULLUP);
+    candidate = stable = digitalRead(pin) == HIGH;
+    armed = false; // Must see a stable release, even if held during boot.
+    changedAt = uptimeMs();
+  }
+  bool pressed(uint64_t now) {
+    bool high = digitalRead(pin) == HIGH;
+    if (high != candidate) { candidate = high; changedAt = now; }
+    if (now - changedAt < BUTTON_DEBOUNCE_MS) return false;
+    if (candidate) { stable = true; armed = true; return false; }
+    if (stable) { stable = false; bool fire = armed; armed = false; return fire; }
+    return false;
+  }
+};
+Button startButton(START_PIN), pauseButton(PAUSE_PIN), completeButton(COMPLETE_PIN);
 char cabinetId[33] = {};
 uint64_t cabinetStarted = 0, cabinetFinished = 0, cabinetElapsed = 0;
 bool buzzerActive = false;
@@ -140,7 +189,7 @@ void startBeeps(uint8_t count, uint64_t now);
 
 uint64_t uptimeMs() { return (uint64_t)esp_timer_get_time() / 1000ULL; }
 void startBeeps(uint8_t count, uint64_t now) {
-  if (!count) return;
+  if (!ENABLE_BUZZER || !count) return;
   beepsRemaining = count;
   buzzerGap = false;
   buzzerStartedAt = now;
@@ -214,11 +263,12 @@ void serviceTimerCommand(uint64_t now, bool detected) {
     bool replacesCounter = waitingCommand.action == RESET_TIMER ||
                            waitingCommand.action == SET_TOTAL;
     UBaseType_t requiredSlots = replacesCounter ? 2 : 1;
+    UBaseType_t reserved = buildActive ? 1 : 0; // Keep a completion slot.
     // The hardware loop is the sole producer, so the consumer can only FREE slots.
     // Defer rather than overwrite a queued boundary or apply a reset without a baseline.
-    if (sequenceNumber > 2147483647UL - (requiredSlots - 1)) {
+    if (sequenceNumber > 2147483647UL - (requiredSlots + reserved - 1)) {
       strcpy(result.error, "Snapshot sequence exhausted; physical restart required");
-    } else if (uxQueueSpacesAvailable(snapshotQueue) < requiredSlots) {
+    } else if (uxQueueSpacesAvailable(snapshotQueue) < requiredSlots + reserved) {
       return; // Continue hardware sampling; network task drains the old queue.
     } else {
       if (replacesCounter) {
@@ -234,9 +284,6 @@ void serviceTimerCommand(uint64_t now, bool detected) {
       }
       queueSnapshot(detected, now); // Immediately capture the applied state/baseline.
       lastSnapshot = now;
-      snapshotNeeded = false;
-      gestureActive = false; // A remote command cancels an unresolved local gesture.
-      completionTriggered = false;
       result.applied = true;
       result.total = totalMs;
       strcpy(result.counter, counterId);
@@ -392,14 +439,18 @@ public:
 HttpResult requestHttp(const char *method, const String &path, const String &body, bool readBody) {
   HttpResult result;
   if (!clockReady() || WiFi.status() != WL_CONNECTED) return result;
+  uint64_t startedAt = uptimeMs();
   WiFiClientSecure client;
   client.setCACert(ROOT_CA);
-  client.setHandshakeTimeout(10);
+  client.setHandshakeTimeout(15);
   HTTPClient http;
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(10000);
+  http.setTimeout(10000);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  if (!http.begin(client, String(API_BASE) + path)) return result;
+  if (!http.begin(client, String(API_BASE) + path)) {
+    Serial.printf("%s %s -> URL setup failed\n", method, path.c_str());
+    return result;
+  }
   const char *headers[] = {"Retry-After"};
   http.collectHeaders(headers, 1);
   http.addHeader("Authorization", String("Bearer ") + DEVICE_TOKEN);
@@ -415,12 +466,18 @@ HttpResult requestHttp(const char *method, const String &path, const String &bod
       BoundedBody sink;
       int received = http.writeToStream(&sink);
       result.oversized = sink.exceeded;
-      if (received < 0 && !sink.exceeded) result.status = -1;
+      if (received < 0 && !sink.exceeded) result.status = HTTPC_ERROR_STREAM_WRITE;
       result.body = sink.text;
     }
   }
   // Never log request headers, credentials, or raw server response bodies.
-  Serial.printf("%s %s -> HTTP %d\n", method, path.c_str(), result.status);
+  Serial.printf("%s %s -> HTTP %d (%llu ms)\n", method, path.c_str(), result.status,
+                (unsigned long long)(uptimeMs() - startedAt));
+  if (result.status < 0) {
+    Serial.printf("[HTTP] %s | Wi-Fi status=%d RSSI=%d dBm\n",
+                  HTTPClient::errorToString(result.status).c_str(),
+                  (int)WiFi.status(), WiFi.RSSI());
+  }
   http.end();
   return result;
 }
@@ -601,7 +658,7 @@ void networkTask(void *parameter) {
       path = "/api/v1/heartbeat";
       JsonDocument doc;
       doc["deviceId"] = DEVICE_ID;
-      doc["firmware"] = "biltoki-gestures-1.6";
+      doc["firmware"] = "bultoki-buttons-2.0";
       serializeJson(doc, body);
       retry = &heartbeatRetry;
     } else if (selected == 1) {
@@ -647,7 +704,8 @@ void networkTask(void *parameter) {
       if (selected == 0) {
         JsonDocument heartbeat;
         if (!response.oversized && !deserializeJson(heartbeat, response.body) && heartbeat["paceNeededMs"].is<uint64_t>()) {
-          paceNeededMs = heartbeat["paceNeededMs"].as<uint64_t>();
+          uint64_t newPace = heartbeat["paceNeededMs"].as<uint64_t>();
+          xQueueOverwrite(paceQueue, &newPace);
         }
       }
       if (selected == 1) active = nullptr; // History entry and original result remain.
@@ -685,22 +743,61 @@ void networkTask(void *parameter) {
   }
 }
 
+// Every accepted action captures its own immutable snapshot immediately.
+// One slot and one sequence number are always reserved for completion.
+bool actionCapacity(UBaseType_t needed) {
+  if (!snapshotQueue || hardwareError ||
+      uxQueueSpacesAvailable(snapshotQueue) < needed ||
+      sequenceNumber > 2147483647UL - (needed - 1)) {
+    queueError = true;
+    Serial.println("Action refused: offline queue full or hardware error. Reconnect and press again.");
+    return false;
+  }
+  return true;
+}
+void localAction(uint8_t action, uint64_t now) {
+  if (action == 2) { // Complete has priority over simultaneous presses.
+    if (!buildActive || !actionCapacity(1)) return;
+    buildActive = false;
+    timerPaused = false;
+    cabinetFinished = now;
+    startBeeps(3, now);
+    Serial.println("[BUTTON] Cabinet completed.");
+  } else if (action == 1) {
+    if (!buildActive || timerPaused || !actionCapacity(2)) return;
+    timerPaused = true;
+    startBeeps(2, now);
+    Serial.println("[BUTTON] Paused.");
+  } else {
+    if (buildActive && !timerPaused) return;
+    if (!actionCapacity(2)) return;
+    if (!buildActive) {
+      makeRandomId(cabinetId);
+      cabinetStarted = now;
+      cabinetFinished = cabinetElapsed = 0;
+      buildActive = true;
+      Serial.println("[BUTTON] New cabinet started.");
+    } else Serial.println("[BUTTON] Resumed.");
+    timerPaused = false;
+    startBeeps(1, now);
+  }
+  // This loop is the only producer, and capacity was checked before mutation.
+  if (!queueSnapshot(buildActive, now)) hardwareError = true;
+  lastSnapshot = now;
+}
+
 void setup() {
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+  if (ENABLE_BUZZER) { pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW); }
+  pinMode(LED_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
   pinMode(ERROR_LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
   digitalWrite(WIFI_LED_PIN, LOW);
   digitalWrite(ERROR_LED_PIN, LOW);
   Serial.begin(9600);
-  unsigned long start = millis();
-  while (!Serial && millis() - start < 5000) delay(10);
-  Serial.println("Starting Biltoki: sensor D8, yellow counting LED D2, CLK D4, DIO D5, Wi-Fi LED D6, error LED D7, buzzer D9.");
   setenv("TZ", "UTC0", 1);
   tzset();
-  pinMode(SENSOR_PIN, INPUT); // Existing EXTERNAL 10k pull-up to 3.3V required.
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  startButton.begin(); pauseButton.begin(); completeButton.begin();
   display.setBrightness(4);
   display.showNumberDecEx(0, 0x40, true);
   makeRandomId(bootId);
@@ -708,83 +805,34 @@ void setup() {
   snapshotQueue = xQueueCreate(64, sizeof(Snapshot));
   commandQueue = xQueueCreate(1, sizeof(TimerCommand));
   resultQueue = xQueueCreate(1, sizeof(TimerResult));
-  rawDetected = digitalRead(SENSOR_PIN) == HIGH;
-  candidateDetected = rawDetected;
-  buildActive = false; // Start stopped; require a stable clear sensor before the first scan.
-  scanArmed = false;
-  candidateSince = uptimeMs();
-  previousTime = uptimeMs();
-  lastSnapshot = previousTime;
-  if (!snapshotQueue || !commandQueue || !resultQueue) {
+  paceQueue = xQueueCreate(1, sizeof(uint64_t));
+  previousTime = lastSnapshot = uptimeMs();
+  if (!snapshotQueue || !commandQueue || !resultQueue || !paceQueue) {
     hardwareError = true;
-    Serial.println("Queue allocation failed; hardware timer only.");
+    Serial.println("Queue allocation failed; restart required.");
     return;
   }
-  queueSnapshot(buildActive, previousTime); // Zero baseline for this boot.
+  queueSnapshot(false, previousTime);
   if (xTaskCreate(networkTask, "ShopFlowNetwork", 16384, nullptr, 1, nullptr) != pdPASS) {
     hardwareError = true;
-    Serial.println("Network task creation failed; hardware timer only.");
+    Serial.println("Network task creation failed; restart required.");
   }
+  Serial.println("Bultoki V2: LEDs D2/D3/D4; display D5/D6; Start D7, Pause D8, Complete D9.");
 }
 
 void loop() {
   uint64_t now = uptimeMs();
-  bool wasCounting = buildActive && !timerPaused;
   advanceTimer(now);
-  int sensorRaw = digitalRead(SENSOR_PIN);
-  rawDetected = sensorRaw == HIGH;
-  if (rawDetected != candidateDetected) {
-    candidateDetected = rawDetected;
-    candidateSince = now;
-  } else if (now - candidateSince >= SCAN_DEBOUNCE_MS) {
-    if (!candidateDetected) {
-      if (gestureActive && buildActive && !completionTriggered) {
-        gestureActive = false;
-        timerPaused = !timerPaused;
-        snapshotNeeded = true;
-        startBeeps(timerPaused ? 2 : 1, now);
-        Serial.println(timerPaused ? "[GESTURE] Cabinet paused." : "[GESTURE] Cabinet resumed.");
-      }
-      scanArmed = true; // A stable release is required between gestures.
-    } else if (scanArmed && !gestureActive) {
-      scanArmed = false;
-      if (!buildActive) {
-        buildActive = true;
-        timerPaused = false;
-        makeRandomId(cabinetId);
-        cabinetStarted = now;
-        cabinetFinished = 0;
-        cabinetElapsed = 0;
-        snapshotNeeded = true;
-        startBeeps(1, now);
-        Serial.println("[GESTURE] New cabinet started.");
-      } else {
-        gestureActive = true;
-        gestureStartedAt = now;
-        completionTriggered = false;
-      }
-    }
-  }
-  if (buildActive && gestureActive && !completionTriggered &&
-      now - gestureStartedAt >= COMPLETE_HOLD_MS) {
-    completionTriggered = true;
-    gestureActive = false;
-    buildActive = false;
-    timerPaused = false;
-    cabinetFinished = now;
-    snapshotNeeded = true;
-    startBeeps(3, now);
-    Serial.println("[GESTURE] Three-second hold: cabinet completed.");
-  }
+  if (paceQueue) xQueueReceive(paceQueue, &paceNeededMs, 0);
+  bool startPressed = startButton.pressed(now);
+  bool pausePressed = pauseButton.pressed(now);
+  bool completePressed = completeButton.pressed(now);
+  if (completePressed) localAction(2, now);
+  else if (pausePressed) localAction(1, now);
+  else if (startPressed) localAction(0, now);
+  // Local action first, then any queued remote action; both snapshots are kept.
   serviceTimerCommand(now, buildActive);
-
-  // Yellow LED follows counting. Local gestures provide the beep pattern;
-  // remote commands beep once when they change counting state.
-  bool isCounting = buildActive && !timerPaused;
-  digitalWrite(LED_PIN, isCounting ? HIGH : LOW);
-  if (isCounting != wasCounting && beepsRemaining == 0) {
-    startBeeps(1, now);
-  }
+  digitalWrite(LED_PIN, buildActive && !timerPaused ? HIGH : LOW);
   if (buzzerActive && now - buzzerStartedAt >= BUZZER_BEEP_MS) {
     digitalWrite(BUZZER_PIN, LOW);
     buzzerActive = false;
@@ -798,44 +846,32 @@ void loop() {
     digitalWrite(BUZZER_PIN, HIGH);
   }
 
-  // Log the raw hand sensor and latched timer state once per second.
-  // Count transitions between reports so brief changes are visible too.
-  static uint64_t lastSensorLog = 0;
-  static int lastRawLoggedSample = -1;
-  static uint32_t sensorEdges = 0;
-  if (lastRawLoggedSample != -1 && sensorRaw != lastRawLoggedSample) ++sensorEdges;
-  lastRawLoggedSample = sensorRaw;
-  if (now - lastSensorLog >= 1000) {
-    lastSensorLog = now;
-    if (Serial) {
-      Serial.printf(
-        "[SENSOR] D8 raw=%d | buildActive=%s | candidate=%s | paused=%s | timer=%s | totalMs=%llu | edges=%lu\n",
-        sensorRaw, buildActive ? "YES" : "NO", candidateDetected ? "YES" : "NO", timerPaused ? "YES" : "NO",
-        timerPaused ? "PAUSED" : (buildActive ? "RUNNING" : "WAITING"),
-        (unsigned long long)totalMs, (unsigned long)sensorEdges);
-    }
-    sensorEdges = 0;
+  // Periodic readings may be skipped while offline. Cumulative totals remain
+  // local; eight slots are protected for actions and cabinet boundaries.
+  if (snapshotQueue && now - lastSnapshot >= SNAPSHOT_INTERVAL &&
+      uxQueueSpacesAvailable(snapshotQueue) > 8 && sequenceNumber < 2147483639UL) {
+    if (queueSnapshot(buildActive, now)) lastSnapshot = now;
   }
-
-  if (snapshotQueue && (snapshotNeeded || now - lastSnapshot >= SNAPSHOT_INTERVAL)) {
-    if (queueSnapshot(buildActive, now)) {
-      queueError = false;
-      lastSnapshot = now;
-      snapshotNeeded = false;
-    } else {
-      queueError = true;
-      if (now - lastQueueWarning >= 5000) {
-        lastQueueWarning = now;
-        Serial.println("Snapshot queue full/exhausted; local total retained, transitions may be coalesced.");
-      }
-    }
-  }
+  if (snapshotQueue) queueError = uxQueueSpacesAvailable(snapshotQueue) <= 8 ||
+                                  sequenceNumber >= 2147483639UL;
   if (now - lastDisplay >= 200) {
     lastDisplay = now;
-    uint64_t remainingMs = paceNeededMs > cabinetElapsed ? paceNeededMs - cabinetElapsed : 0;
-    uint64_t seconds = (buildActive ? remainingMs : paceNeededMs) / 1000;
+    uint64_t shownMs = cabinetElapsed;
+    if (paceNeededMs) {
+      shownMs = buildActive ? (paceNeededMs > cabinetElapsed ? paceNeededMs - cabinetElapsed : 0)
+                            : paceNeededMs;
+    }
+    uint64_t seconds = shownMs / 1000;
     if (seconds > 5999) seconds = 5999;
     display.showNumberDecEx((seconds / 60) * 100 + seconds % 60, 0x40, true);
+  }
+  static uint64_t lastLog = 0;
+  if (now - lastLog >= 1000) {
+    lastLog = now;
+    if (Serial) Serial.printf("[BUTTONS] Start=%d Pause=%d Complete=%d (0=pressed) | %s | cabinetMs=%llu | totalMs=%llu\n",
+      digitalRead(START_PIN), digitalRead(PAUSE_PIN), digitalRead(COMPLETE_PIN),
+      !buildActive ? "IDLE" : timerPaused ? "PAUSED" : "RUNNING",
+      (unsigned long long)cabinetElapsed, (unsigned long long)totalMs);
   }
   digitalWrite(WIFI_LED_PIN, WiFi.status() == WL_CONNECTED ? HIGH : LOW);
   uint32_t errors = networkErrors.load() |

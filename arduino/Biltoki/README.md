@@ -1,43 +1,36 @@
-# Biltoki cabinet-building timer
+# Biltoki cabinet timer
 
-`Biltoki.ino` is the source of truth for the Biltoki device, which tracks cabinet-building time. It was imported from the supplied device code on October 23, 2026 and now uses hand scans to toggle cabinet-building time. The separate `../ShopFlowTimer/ShopFlowTimer.ino` sketch is not Biltoki's canonical source.
+`Biltoki.ino` is the source of truth for this device. The current sketch uses three normally-open, active-LOW buttons on an Arduino Nano ESP32. The separate `../ShopFlowTimer/ShopFlowTimer.ino` is another firmware target.
 
-Maintain this sketch alongside site changes that affect its device API or timer behavior. Upload this sketch to Biltoki whenever firmware changes are needed; deploying the site alone does not update the physical device.
+## Upload and wiring
 
-## Upload setup
+1. Open `Biltoki.ino` with the Arduino Nano ESP32 board selected. Install ArduinoJson 7, TM1637Display, and the board's ESP32 package.
+2. Keep `secrets.h` in this folder and out of Git. Copy `secrets.example.h` as a starting point, then supply the Wi-Fi credentials, registered device ID and token, HTTPS URL, and the site's public root CA PEM. Do not disable TLS verification.
+3. Compile and upload the sketch to the physical device. Deploying the site does not flash it. Use Serial Monitor at 9600 baud.
 
-1. Open `Biltoki.ino` in the Arduino IDE with the matching ESP32 board selected. The sketch uses Arduino pin labels (`D8`, etc.).
-2. Install ArduinoJson 7 and TM1637Display, plus the board's ESP32 support package.
-3. Copy `secrets.example.h` to `secrets.h` in this folder and supply the Wi-Fi credentials, Biltoki's registered device UUID and token, and the public root CA PEM for the configured HTTPS endpoint. Keep `secrets.h` private; it is ignored by Git. The example UUID is a placeholder, not Biltoki's actual ID.
-4. Deploy the updated site/API before uploading this firmware: the older strict API rejects the new cabinet metadata. Compile and upload to the physical Biltoki device. Serial output uses 9600 baud.
+| Component | Pin | Connection |
+| --- | --- | --- |
+| Yellow counting LED | D2 | Own 220 ohm resistor; cathode to GND |
+| Blue Wi-Fi LED | D3 | Own 220 ohm resistor; cathode to GND |
+| Red error LED | D4 | Own 220 ohm resistor; cathode to GND |
+| TM1637 CLK / DIO | D5 / D6 | Display VCC to 3.3V; GND to GND |
+| Start button | D7 | Normally open, between pin and GND |
+| Pause button | D8 | Normally open, between pin and GND |
+| Complete button | D9 | Normally open, between pin and GND |
+| Optional buzzer driver | D10 | Disabled by default in firmware |
 
-## Supplied hardware configuration
+Start begins a new cabinet while idle and resumes one while paused. Pause stops accumulation. Complete ends the active cabinet with one press. Buttons debounce for 40 ms and require a stable release between presses. The yellow LED shows whether time is counting. The blue LED shows Wi-Fi association only; it does not indicate API reachability. The display shows the site's pace countdown when available and elapsed cabinet time otherwise.
 
-| Component | Pin |
-| --- | --- |
-| Detection sensor | D8 |
-| Yellow counting LED | D2 |
-| TM1637 CLK / DIO | D4 / D5 |
-| Wi-Fi LED | D6 |
-| Error LED | D7 |
-| Active buzzer | D9 |
-
-The sensor input uses an external 10k pull-up to 3.3V and treats HIGH as detected. Swipe once while idle to start a cabinet. During a build, one swipe pauses or resumes the same cabinet; two swipes within 600 ms complete it, whether running or paused. Each swipe requires moving the hand away. A single pause/resume takes effect after the 600 ms double-swipe window; the timer keeps its previous state while deciding. The initial start swipe does not count toward a double swipe. Both detection and release must remain stable for 100 ms; holding a hand over the sensor triggers only once. After boot, the timer starts stopped and requires a stable clear sensor before accepting the first scan. Stopping preserves accumulated time; the next start continues that total. The yellow D2 LED stays on while counting and turns off when stopped or paused; the timer and uploaded snapshots use the latched build state, not raw hand presence. Each status LED has its own 220 ohm resistor.
-
-Serial diagnostics identify the actual D8 input and show raw sensor state separately from the latched buildActive state. The candidate value is the sensor state being debounced.
-
-Connect D9 through a 220 ohm series resistor to the active buzzer's positive leg, and connect its negative leg to GND. The buzzer starts off and beeps for 350 milliseconds on each resolved start, pause, resume, or completion gesture. It also beeps when a remote pause or resume changes the counting state. Resuming without an active build or while already counting does not beep. The hardware loop turns the buzzer off using elapsed uptime, without blocking sensor sampling or timer updates. All other pin assignments are unchanged.
+The device keeps the cumulative and current cabinet timers during a Wi-Fi outage. Snapshots waiting to upload are stored in finite RAM and are lost on power loss. A full queue can refuse new button actions until it drains. Reboot starts idle.
 
 ## Site integration
 
-The sketch sends heartbeat and detection-time snapshots, polls commands, and acknowledges command results through `/api/v1/heartbeat`, `/api/v1/events`, `/api/v1/commands`, and `/api/v1/commands/:id/ack`. It supports pause, resume, reset, and setting the accumulated detection time. Local single swipes and remote pause/resume share the same pause state. A local swipe can resume a remotely paused cabinet. An applied remote command cancels any pending swipe gesture. Reset and set-total do not change the build state. The existing detected field now reports whether a build is active; a completion double swipe publishes false so the site can record completion. Each start creates a random cabinet ID and a separate per-cabinet timer; each completion freezes its duration. Reset/set-total affect only the cumulative counter, not that cabinet duration. Optional cabinet metadata travels with every subsequent snapshot, including repeated completed snapshots until the next start. The site uses accepted measurements to show a numbered cabinet log with start/finish times, device-measured duration, and building/paused/completed/interrupted status. Visible numbers start at 1 within the selected shift/day; the underlying ID stays stable. A double swipe completes the cabinet without a 5-second minimum. See [the timer contract](../../docs/DETECTION_TIME.md) for site-side context.
+The sketch sends `/api/v1/heartbeat` and `/api/v1/events`, polls `/api/v1/commands`, and acknowledges each command at `/api/v1/commands/:id/ack`. Remote pause, resume, reset, and set-total commands are supported. Reset and set-total affect the cumulative counter, not the active cabinet's elapsed time. Cabinet snapshots include a stable cabinet ID, measured duration, and running/completed state. See [the timer contract](../../docs/DETECTION_TIME.md).
 
-The updated sketch has not been compiled or tested on physical hardware in this workspace. Upload it to Biltoki only after compiling against the installed Arduino ESP32 core and confirming the sensor behavior on the actual cabinet station.
+## Red LED and HTTP diagnostics
 
-Gesture update for firmware 1.6: a short swipe pauses or resumes the active cabinet; a continuous 3-second hold completes it. Feedback is one 350 ms beep for start/resume, two beeps for pause, and three beeps for completion, with 180 ms gaps between beeps. The heartbeat response now supplies the website's current “Pace needed” value. The TM1637 shows that pace while idle and counts down the remaining time for the active cabinet. This replaces the previous cumulative day-time display. The API must be deployed before uploading this firmware.
+At 9600 baud, `[ERROR LED]` reports each active cause: `config`, `wifi`, `clock`, `heartbeat`, `ack`, `poll`, `events`, `malformedCommand`, `hardware`, `snapshotQueue`, and `command`. `poll=1` means the command polling lane failed; it does not mean a button or timer fault. The corresponding request log shows the HTTP code and elapsed time. Negative codes also show the HTTPClient error name, Wi-Fi status, and signal strength. The request is retried with backoff while local timekeeping continues.
 
-Cabinet state and queued snapshots are held in RAM. Reboot starts stopped; the site marks a previously reported unfinished cabinet interrupted after it sees the new boot. Long network outages can exhaust the bounded queue and lose intermediate cabinets; power loss loses unsent data. Time-of-day fields remain unavailable until a snapshot has a synchronized clock, while device-measured duration remains monotonic.
+`HTTP -1` is HTTPClient's connection-establishment failure. It can be caused by DNS, routing, the VPS/proxy not accepting TCP 443, or TLS setup; the code alone does not identify which. A failure near the configured 10-second connect or 15-second TLS limit suggests a timeout; a fast failure suggests refusal or another immediate connection error. `HTTP -11` means response read timeout. An HTTP 401/403 indicates device authentication or authorization, and an HTTP 5xx indicates the server or proxy returned an error. Check whether heartbeat and events also fail, whether the blue Wi-Fi LED is on, and whether the same hostname is reachable from another device on the same Wi-Fi. Do not post `secrets.h` or a device token in diagnostics.
 
-## Red LED diagnostics
-
-At 9600 baud, `[ERROR LED]` reports changes and repeats every 15 seconds while red is on. Every field set to `1` is an active cause: `config` (missing/invalid network configuration), `wifi` (disconnected for 30 seconds), `clock` (NTP not ready after 30 seconds connected), `heartbeat`, `ack`, `poll`, or `events` (failed API lane), `malformedCommand` (invalid command ID), `hardware` (queue allocation/network-task creation), `snapshotQueue` (full queue or exhausted sequence), and `command` (rejected/failed command). The existing HTTP log supplies the status code; for example, events with HTTP 400 can indicate an API that has not been updated for cabinet metadata. Recovery prints OFF and all-zero flags. No credentials or response bodies are logged.
+The sketch has not been compiled or tested on physical hardware in this workspace.

@@ -58,6 +58,7 @@ model Workstation {
   DetectionMeasurement_workstationIdRows DetectionMeasurement[] @relation("DetectionMeasurement_workstationId")
   Measurement_workstationIdRows Measurement[] @relation("Measurement_workstationId")
   Note_workstationIdRows Note[] @relation("Note_workstationId")
+  User_workstationIdRows User[] @relation("User_workstationId")
 }
 model Shift {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -76,8 +77,11 @@ model User {
   name String
   passwordHash String
   role String @default("viewer")
+  workstationId String? @db.VarChar(36)
   @@index([orgId])
+  @@index([workstationId])
   orgIdRef Organization @relation("User_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation? @relation("User_workstationId", fields: [workstationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   Session_userIdRows Session[] @relation("Session_userId")
 }
 model Session {

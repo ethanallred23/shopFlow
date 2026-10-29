@@ -1,6 +1,6 @@
 # Explicit production deployment
 
-ShopFlow uses Node.js 22+ and MySQL 8.0. The database server and the named database must exist before application setup. `setup:production` creates the **tables inside that database** using the four committed migrations. It is an explicit command, never a Git hook or an application-start side effect.
+ShopFlow uses Node.js 22+ and MySQL 8.0. The database server and the named database must exist before application setup. `setup:production` creates the **tables inside that database** using the committed migrations. It is an explicit command, never a Git hook or an application-start side effect.
 
 ## Prepare MySQL
 
@@ -60,6 +60,8 @@ npm run admin:create
 ## Subsequent updates and failures
 
 Use one deployment operator/job at a time. Stage the new release separately, install its dependencies, take and verify a fresh backup, and schedule maintenance for changes that may lock tables. Run `npm run setup:production` with the database-scoped deployment account. Only after migration/build succeeds, switch the service to the new release and restart with runtime credentials. Check logs, HTTPS sign-in and dashboard access. Do not rerun `admin:create` for updates.
+
+The user-to-workstation assignment feature requires migration `20261029000000_user_workstation` before starting the new application. Administrators can create accounts and assign each person to a station in Settings. Assignments identify the current team at a station; they do not retroactively attribute individual cabinet records to a person.
 
 The command fails immediately at the first unsuccessful step and does not restart the server. Successfully applied migrations remain applied if a later build fails; MySQL DDL is not an all-or-nothing transaction. Fix the failure, then rerun setup. Never use `migrate reset`, `db push --force-reset`, or `migrate dev` on production. Review failed migration state before using Prisma's manual recovery tools; do not mark a partially applied migration complete blindly.
 
