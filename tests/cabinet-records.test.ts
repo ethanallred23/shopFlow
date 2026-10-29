@@ -8,6 +8,14 @@ const sample=(sequence:number,uptime:number,id='a',finished:number|null=null,ela
  data:{detected:finished===null,totalDetectedMs:elapsed,counterId:'counter',cabinet:{id,startedUptimeMs:id==='a'?100:2000,finishedUptimeMs:finished,elapsedMs:elapsed,running}}
 });
 describe('cabinet records',()=>{
+ it('keeps builds from separate devices distinct even when their local cabinet IDs match',()=>{
+  const first=sample(1,100),second=sample(2,100);second.deviceId='other-device';
+  const finish=sample(3,1000,'a',1000,900);
+  const result=cabinetRecords([first,second,finish],start,end,new Date(origin+1000));
+  expect(result).toHaveLength(2);
+  expect(result.find(r=>r.deviceId==='device')).toMatchObject({status:'completed',durationMs:900});
+  expect(result.find(r=>r.deviceId==='other-device')).toMatchObject({status:'building',durationMs:0});
+ });
  it('creates an immediate numbered record and updates it without duplicating periodic/idle snapshots',()=>{
   const first=cabinetRecords([sample(1,100)],start,end,new Date(origin+100));
   expect(first).toHaveLength(1);expect(first[0]).toMatchObject({number:1,status:'building',durationMs:0,startedAt:new Date(origin+100).toISOString()});
