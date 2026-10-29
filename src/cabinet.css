@@ -91,3 +91,18 @@
 @media(max-width:600px){.station-pace-board{padding:15px}.station-pace-list{grid-template-columns:1fr}.cabinet-progress:fullscreen .cabinet-progress-track{height:18px}.cabinet-progress:fullscreen .cabinet-target-marker{height:32px;top:-7px}}
 .station-pace-counts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.station-pace-counts strong{padding:6px 10px;border-radius:8px;font-size:12px;white-space:nowrap}.station-pace-counts .behind{background:#fbe8e4;color:#aa4d3d}.station-pace-counts .ahead{background:#e3f5ed;color:#247d67}
 .cabinet-progress:fullscreen .station-pace-list{max-height:clamp(160px,25vh,300px);overflow:auto;padding:2px}
+.station-pace-row{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.station-pace-row:hover{transform:translateY(-2px);box-shadow:0 8px 20px #173b4420;border-color:#8ccbbd}
+.station-pace-row:focus-visible{outline:3px solid #087f71;outline-offset:3px}
+.station-pace-identity strong{display:flex;align-items:center;gap:5px}.station-pace-identity svg{flex:none;opacity:.65}.station-pace-row:hover .station-pace-identity svg{opacity:1}
+@media(prefers-reduced-motion:reduce){.station-pace-row{transition:none}.station-pace-row:hover{transform:none}}
+
+/* A gentle sweep makes active builds visible from across the floor. */
+.build-in-progress{position:relative;isolation:isolate;background:linear-gradient(115deg,#d8f5e9 0%,#bcebdc 32%,#e6faf1 58%,#b6e8d9 100%);background-size:220% 220%;animation:build-gradient-flow 7s ease-in-out infinite;box-shadow:0 8px 24px #1684691c}
+.build-in-progress::before{content:"";position:absolute;inset:0 auto 0 -45%;width:45%;background:linear-gradient(90deg,transparent,#ffffff85,transparent);transform:skewX(-18deg);animation:build-light-sweep 4.5s ease-in-out infinite;pointer-events:none;z-index:0}
+.build-in-progress>*{position:relative;z-index:1}
+.build-builder{display:grid;place-items:center;width:40px;height:40px;border:1px solid #9bdac4;border-radius:50%;background:#ffffffd9;color:#08785f;box-shadow:0 3px 12px #08785f24}
+.build-in-progress.is-still{background:#eaf5f0;animation:none;box-shadow:none}.build-in-progress.is-still::before{display:none}
+@keyframes build-gradient-flow{0%,100%{background-position:0% 45%}50%{background-position:100% 55%}}
+@keyframes build-light-sweep{0%,15%{left:-45%;opacity:0}25%{opacity:.8}65%,100%{left:115%;opacity:0}}
+@media(prefers-reduced-motion:reduce){.build-in-progress,.build-in-progress::before{animation:none}}
