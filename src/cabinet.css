@@ -50,3 +50,19 @@
 .cabinet-dev-form .cabinet-test-success{color:#087454;font-weight:700}.cabinet-dev-form .cabinet-test-error{color:#b33427;font-weight:700;max-width:100%}.cabinet-dev-form input:disabled{background:#edf2f0;cursor:wait}
 
 .cabinet-history{margin-top:24px;border-top:1px solid var(--edge,#d8e5e5);padding-top:18px}.cabinet-history h3{margin:0;font-size:17px}.cabinet-history h3 small{font-size:12px;font-weight:500;margin-left:12px}.cabinet-history p{font-size:12px;color:#526962}.cabinet-table-scroll{overflow-x:auto}.cabinet-history table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}.cabinet-history th,.cabinet-history td{padding:12px 10px;border-bottom:1px solid var(--edge,#d8e5e5);white-space:nowrap}.cabinet-history td{font-variant-numeric:tabular-nums}.cabinet-history thead{background:#ffffff80}.cabinet-progress:fullscreen .cabinet-history{flex-shrink:0}
+
+/* A full-screen graph and its log occupy separate scrollable blocks. */
+.cabinet-progress:fullscreen{display:block;overflow-y:auto;overflow-x:hidden;justify-content:initial}
+.cabinet-progress:fullscreen .cabinet-heading{align-items:flex-start}
+.cabinet-progress:fullscreen .cabinet-view-toggle{display:flex;width:max-content;margin:24px auto}
+.cabinet-progress:fullscreen .cabinet-chart{display:block;min-height:0;width:100%}
+.cabinet-progress:fullscreen .cabinet-chart-heading{margin:0 0 18px}
+.cabinet-progress:fullscreen .cabinet-metrics{max-width:none;margin:0 0 24px}
+.cabinet-progress:fullscreen .cabinet-graph-status{margin:0 0 16px}
+.cabinet-progress:fullscreen .cabinet-plot{display:block;flex:none;height:clamp(280px,40vh,540px);min-height:0;margin:0 0 12px}
+.cabinet-progress:fullscreen .cabinet-graph-footer{margin:0 0 18px}
+.cabinet-progress:fullscreen .cabinet-history{position:relative;margin-top:32px;padding-top:22px;clear:both}
+.cabinet-progress:fullscreen .cabinet-progress-track{margin:56px 0 22px}
+.cabinet-progress:fullscreen .cabinet-foot{margin:0}
+@media(max-width:900px){.cabinet-progress:fullscreen .cabinet-metrics{gap:12px}.cabinet-progress:fullscreen .cabinet-metrics strong{font-size:clamp(26px,4vw,40px)}}
+@media(max-width:600px){.cabinet-progress:fullscreen .cabinet-plot{height:300px}.cabinet-progress:fullscreen .cabinet-heading{flex-wrap:wrap}.cabinet-progress:fullscreen .cabinet-heading-actions{flex-direction:row}.cabinet-progress:fullscreen .cabinet-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.cabinet-progress:fullscreen .cabinet-history{margin-top:24px}}
