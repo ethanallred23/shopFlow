@@ -49,15 +49,19 @@ export function shiftWindow(date:string,zone:string,s:Schedule,now=new Date()){
 export function percentile(xs:number[],p:number){if(!xs.length)return null;const a=[...xs].sort((a,b)=>a-b);return a[Math.max(0,Math.ceil(a.length*p)-1)];}
 export function dailySchedule(date:string,zone:string,shifts:Schedule[],now=new Date()){
   const day=DateTime.fromISO(date,{zone}).startOf('day');const start=day.toJSDate(),end=day.plus({days:1}).toJSDate();
-  let targetFactor=0,expectedFactor=0;
+  let targetFactor=0,expectedFactor=0,workingMs=0,elapsedMs=0;
   for(const dayOffset of [-1,0])for(const shift of shifts){
     const w=shiftWindow(day.plus({days:dayOffset}).toISODate()!,zone,shift,now);
     const workingUntil=(until:Date)=>shiftWindow(day.plus({days:dayOffset}).toISODate()!,zone,shift,until).elapsedMs;
     if(w.workingMs){
-      targetFactor+=(workingUntil(end)-workingUntil(start))/w.workingMs;
-      expectedFactor+=(workingUntil(new Date(Math.max(start.getTime(),Math.min(end.getTime(),now.getTime()))))-workingUntil(start))/w.workingMs;
+      const scheduled=workingUntil(end)-workingUntil(start);
+      const elapsed=workingUntil(new Date(Math.max(start.getTime(),Math.min(end.getTime(),now.getTime()))))-workingUntil(start);
+      targetFactor+=scheduled/w.workingMs;
+      expectedFactor+=elapsed/w.workingMs;
+      workingMs+=scheduled;
+      elapsedMs+=elapsed;
     }
   }
-  return {start,end,targetFactor,expectedFactor};
+  return {start,end,targetFactor,expectedFactor,workingMs,elapsedMs};
 }
 export function can(role:string,required:'viewer'|'supervisor'|'admin'){return ['viewer','supervisor','admin'].indexOf(role)>=['viewer','supervisor','admin'].indexOf(required);}

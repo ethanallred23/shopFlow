@@ -1,4 +1,4 @@
-﻿import {Area,CartesianGrid,Line,ComposedChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
+import {Area,CartesianGrid,Line,ComposedChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
 import {BarChart3,Gauge,LayoutDashboard,Maximize2,Minimize2,PackageCheck,Timer,TrendingUp} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import './cabinet.css';
@@ -22,7 +22,7 @@ export function CompletionNotice({cabinets}:{cabinets:any[]}){
  return celebration&&<div className="cabinet-celebration" role="status" aria-live="polite"><div className="celebration-card"><span className="celebration-spark spark-one"/><span className="celebration-spark spark-two"/><span className="celebration-icon"><PackageCheck size={36}/></span><span className="build-kicker">ANOTHER ONE COMPLETE</span><strong>Cabinet #{celebration.number} finished!</strong><small>{celebration.stationName||'Nice work, team.'}</small><button onClick={()=>setCelebration(null)} aria-label="Dismiss completion">×</button></div></div>;
 }
 
-export function CabinetProgress({progress,compact=false,devMode=false,onSimulate,zone,department=false,title}:{progress:any;zone?:string;compact?:boolean;devMode?:boolean;department?:boolean;title?:string;onSimulate?:(completed:number)=>Promise<void>}){
+export function CabinetProgress({progress,compact=false,devMode=false,onSimulate,zone,department=false,title,stations=[]}:{progress:any;zone?:string;compact?:boolean;devMode?:boolean;department?:boolean;title?:string;stations?:any[];onSimulate?:(completed:number)=>Promise<void>}){
  const frame=useRef<HTMLElement>(null);
  const [fullscreen,setFullscreen]=useState(false);
  const [nowMs,setNowMs]=useState(()=>Date.now());
@@ -32,6 +32,17 @@ export function CabinetProgress({progress,compact=false,devMode=false,onSimulate
  if(!progress)return null;
  const activeCabinets=(progress.cabinets??[]).filter((c:any)=>c.status==='building'||c.status==='paused');
  const displayedBuildMs=visibleCurrentBuildMs(activeCabinets,nowMs);
+ const recentCabinets=[...(progress.cabinets??[])].sort((a:any,b:any)=>{
+  if((a.status==='completed')!==(b.status==='completed'))return a.status==='completed'?-1:1;
+  return Date.parse(b.finishedAt??b.lastReportedAt)-Date.parse(a.finishedAt??a.lastReportedAt)||b.number-a.number;
+ });
+ const stationDifference=(station:any)=>{
+  const completed=station.timerOnly?station.cabinet?.completed:station.count;
+  const expected=station.timerOnly?station.cabinet?.expected:station.expected;
+  return completed==null||expected==null||!station.target?null:completed-expected;
+ };
+ const behindStations=stations.filter(s=>{const difference=stationDifference(s);return difference!==null&&difference<0;}).length;
+ const aheadStations=stations.filter(s=>{const difference=stationDifference(s);return difference!==null&&difference>0;}).length;
  const status=progress.completed>progress.expected?'ahead':progress.completed===progress.expected?'on-time':'behind';
  const pace=progress.requiredMsPerCabinet?duration(progress.requiredMsPerCabinet):'—';
  const statusText=status==='ahead'?`${progress.completed-progress.expected} cabinet${progress.completed-progress.expected===1?'':'s'} ahead of pace`:status==='on-time'?'Exactly on pace':`${progress.expected-progress.completed} cabinet${progress.expected-progress.completed===1?'':'s'} behind pace`;
@@ -51,10 +62,18 @@ export function CabinetProgress({progress,compact=false,devMode=false,onSimulate
   <div className="cabinet-view-toggle" role="tablist" aria-label="Cabinet progress view"><button className={view==='summary'?'active':''} onClick={()=>setView('summary')} role="tab" aria-selected={view==='summary'}><LayoutDashboard size={15}/> Summary</button><button className={view==='graph'?'active':''} onClick={()=>setView('graph')} role="tab" aria-selected={view==='graph'}><BarChart3 size={15}/> Graph</button></div>
   {devMode&&onSimulate&&<div className="cabinet-dev-controls"><button className="cabinet-dev-toggle" onClick={()=>{setTestCompleted(String(progress.completed));setTestError('');setTestNotice('');setEditTest(!editTest)}}>{editTest?'Close test controls':'Developer testing'}</button>{editTest&&<form className="cabinet-dev-form" onSubmit={async e=>{e.preventDefault();setSimulating(true);setTestError('');setTestNotice('');try{await onSimulate(Number(testCompleted));setTestNotice(`Test progress set to ${testCompleted} completed cabinets.`);}catch(error:any){setTestError(error.message||'Could not update test progress.');}finally{setSimulating(false);}}}><label>Simulated cabinets completed<input disabled={simulating} type="number" min="0" max={progress.target} value={testCompleted} onChange={e=>setTestCompleted(e.target.value)}/></label><span>Set the count to expected now ({progress.expected}) to preview on-pace colors.</span><button className="cabinet-dev-apply" type="submit" disabled={simulating||testCompleted===''||Number(testCompleted)>progress.target}>{simulating?'Updating…':'Apply test progress'}</button>{simulating&&<span role="status">Saving test events…</span>}{testNotice&&<span className="cabinet-test-success" role="status">{testNotice}</span>}{testError&&<span className="cabinet-test-error" role="alert">{testError}</span>}</form>}</div>}
   {view==='graph'?graph:summary}
+  {department&&stations.length>0&&<section className="station-pace-board" aria-label="Workstation pace"><div className="station-pace-heading"><div><h3>Workstation pace</h3><p>Each station's target is spread across its scheduled working time.</p></div><div className="station-pace-counts"><strong className="behind">{behindStations} behind</strong><strong className="ahead">{aheadStations} ahead</strong></div></div><div className="station-pace-list">{stations.map((station:any)=>{
+    const completed=station.timerOnly?station.cabinet?.completed:station.count;
+    const expected=station.timerOnly?station.cabinet?.expected:station.expected;
+    const target=station.target??0;
+    const difference=stationDifference(station);
+    const pace=difference===null?'unknown':difference>0?'ahead':difference<0?'behind':'on-time';
+    return <div className={'station-pace-row '+pace} key={station.id}><div className="station-pace-identity"><strong>{station.name}</strong><small>{station.people?.[0]?.name||'No user assigned'} · {station.devices} device{station.devices===1?'':'s'}</small></div><div className="station-pace-numbers"><strong>{completed??'—'} <small>/ {target}</small></strong><span>{station.timerOnly?'cabinets':'parts'} · expected now {expected??'—'}</span></div><span className={'pace-status '+pace}>{pace==='unknown'?'No pace data':pace==='ahead'?`${difference} ahead`:pace==='behind'?`${Math.abs(difference!)} behind`:'On pace'}</span></div>;
+   })}</div></section>}
   <div className="cabinet-history">
-   <h3>Cabinet log <small>{progress.started??0} started ? {progress.completed} completed</small></h3>
+   <h3>Cabinet log <small>{progress.started??0} started · {progress.completed} completed</small></h3>
    <p>Numbers are for the selected shift/day. Build time is measured by the device and excludes pauses.</p>
-   {!(progress.cabinets?.length)?<p>No cabinets started in this period.</p>:<div className="cabinet-table-scroll"><table><thead><tr><th>Cabinet</th>{department&&<th>Workstation</th>}<th>Operator at start</th><th>Completed by</th><th>Started</th><th>Finished</th><th>Build time</th><th>Status</th></tr></thead><tbody>{progress.cabinets.map((cabinet:any)=><tr key={cabinet.id}><th scope="row" title={cabinet.id}>#{cabinet.number}</th>{department&&<td>{cabinet.stationName}</td>}<td>{cabinet.operatorName||'Unassigned / unknown'}</td><td>{cabinet.status==='completed'?(cabinet.completedByName||'Unassigned / unknown'):'-'}</td><td>{cabinet.startedAt?new Date(cabinet.startedAt).toLocaleString([],{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}):'Time unavailable'}</td><td>{cabinet.finishedAt?new Date(cabinet.finishedAt).toLocaleString([],{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}):'?'}</td><td>{buildDuration(visibleBuildMs(cabinet,nowMs))}</td><td>{cabinet.status==='completed'?'Completed':cabinet.status==='interrupted'?'Interrupted':`${cabinet.stale?'Last reported: ':''}${cabinet.status==='paused'?'Paused':'Building'}`}</td></tr>)}</tbody></table></div>}
+   {!(progress.cabinets?.length)?<p>No cabinets started in this period.</p>:<div className="cabinet-table-scroll"><table><thead><tr><th>Cabinet</th>{department&&<th>Workstation</th>}<th>Operator at start</th><th>Completed by</th><th>Started</th><th>Finished</th><th>Build time</th><th>Status</th></tr></thead><tbody>{recentCabinets.map((cabinet:any)=><tr key={cabinet.id}><th scope="row" title={cabinet.id}>#{cabinet.number}</th>{department&&<td>{cabinet.stationName}</td>}<td>{cabinet.operatorName||'Unassigned / unknown'}</td><td><strong className={'cabinet-finisher'+(cabinet.status==='completed'&&!cabinet.completedByName?' is-unassigned':'')}>{cabinet.status==='completed'?(cabinet.completedByName||'Unassigned / unknown'):'—'}</strong></td><td>{cabinet.startedAt?new Date(cabinet.startedAt).toLocaleString([],{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}):'Time unavailable'}</td><td>{cabinet.finishedAt?new Date(cabinet.finishedAt).toLocaleString([],{timeZone:zone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}):'?'}</td><td>{buildDuration(visibleBuildMs(cabinet,nowMs))}</td><td>{cabinet.status==='completed'?'Completed':cabinet.status==='interrupted'?'Interrupted':`${cabinet.stale?'Last reported: ':''}${cabinet.status==='paused'?'Paused':'Building'}`}</td></tr>)}</tbody></table></div>}
   </div>
  </section>;
 }

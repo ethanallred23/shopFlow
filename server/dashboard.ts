@@ -14,7 +14,7 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   const date=query.date || (shift && shift.endMinute<=shift.startMinute && localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}):localNow).toISODate();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!DateTime.fromISO(date).isValid)throw new HttpError(400,'Invalid date');
   const daily=query.period==='day'?dailySchedule(date,org.timezone,shifts):null;
-  const window=daily?{...daily,workingMs:0,elapsedMs:0}:shift?shiftWindow(date,org.timezone,shift):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0};
+  const window=daily?daily:shift?shiftWindow(date,org.timezone,shift):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0};
   const filtered=stations.filter(s=>(!query.area||s.areaId===query.area)&&(!query.shop||areas.find(a=>a.id===s.areaId)?.shopId===query.shop)&&(!query.workstation||s.id===query.workstation));
   const ids=filtered.map(s=>s.id);
   const timerHistory=await db.rawEvent.groupBy({by:['workstationId'],where:{orgId,workstationId:{in:ids},type:'sensor.detection_time_snapshot'}});
@@ -41,7 +41,7 @@ export async function dashboard(orgId:string,query:Record<string,any>){
     const timers=await detectionDashboard(orgId,ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end);
     const timerOnly=(timers.length>0||timerHistory.some(h=>h.workstationId===s.id))&&ds.every(d=>(d.capabilities as string[]).includes('detection_time'));
     const targetValue=daily?Math.round(s.target*daily.targetFactor):s.target;
-    const expectedValue=daily?Math.floor(s.target*daily.expectedFactor):window.workingMs?Math.floor(s.target*window.elapsedMs/window.workingMs):0;
+    const expectedValue=window.workingMs?Math.floor(targetValue*window.elapsedMs/window.workingMs):0;
     const cabinet=timerOnly?await cabinetProgress(null,s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs):null;
     return {...s,people:people.filter(p=>p.workstationId===s.id).map(({id,name})=>({id,name})),timerOnly,timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!),cabinet})),target:targetValue,count,expected:timerOnly?cabinet?.expected??0:expectedValue,cabinet,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
   }));

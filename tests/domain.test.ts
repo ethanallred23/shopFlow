@@ -15,7 +15,7 @@ describe('scheduled time',()=>{
  it('crosses midnight and excludes breaks',()=>{const w=shiftWindow('2026-10-14','America/Denver',shift,new Date('2026-10-15T06:15:00Z'));expect(w.workingMs).toBe(7.5*3600000);expect(w.elapsedMs).toBe(2*3600000);});
  it('clamps before and after shift',()=>{expect(shiftWindow('2026-10-14','UTC',shift,new Date('2026-10-14T20:00:00Z')).elapsedMs).toBe(0);expect(shiftWindow('2026-10-14','UTC',shift,new Date('2026-10-16T00:00:00Z')).elapsedMs).toBe(7.5*3600000);});
  it('uses actual elapsed time across daylight saving boundaries',()=>{const w=shiftWindow('2026-11-01','America/Denver',{startMinute:0,endMinute:240,breaks:[]});expect(w.workingMs).toBe(5*3600000);});
- it('prorates overnight targets across calendar days',()=>{const w=dailySchedule('2026-10-14','UTC',[{startMinute:1320,endMinute:360,breaks:[]}],new Date('2026-10-14T03:00:00Z'));expect(w.targetFactor).toBe(1);expect(w.expectedFactor).toBe(3/8);});
+ it('prorates overnight targets across calendar days',()=>{const w=dailySchedule('2026-10-14','UTC',[{startMinute:1320,endMinute:360,breaks:[]}],new Date('2026-10-14T03:00:00Z'));expect(w.targetFactor).toBe(1);expect(w.expectedFactor).toBe(3/8);expect(w.workingMs).toBe(8*3600000);expect(w.elapsedMs).toBe(3*3600000);});
 });
 it('role hierarchy and unknown roles fail closed',()=>{expect(can('viewer','supervisor')).toBe(false);expect(can('supervisor','admin')).toBe(false);expect(can('admin','supervisor')).toBe(true);expect(can('bogus','viewer')).toBe(false);});
 it('unavailable cycles are null, percentiles use nearest rank',()=>{expect(percentile([],.5)).toBe(null);expect(percentile([10,20,30,40,50],.9)).toBe(50);});
