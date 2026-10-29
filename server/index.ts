@@ -15,6 +15,7 @@ import {dashboard} from './dashboard';
 import {cabinetProgress} from './cabinet-progress';
 import {heartbeatPace} from './heartbeat-pace';
 import {expireCommands,acknowledgeCommand} from './commands';
+import {changePerson} from './operators';
 export const app=express();
 const log=pino(); const updates=new EventEmitter();updates.setMaxListeners(1000);
 app.disable('x-powered-by');
@@ -120,8 +121,7 @@ app.get('/api/workstations/:id/people',role('supervisor'),asyncRoute(async(req,r
 app.put('/api/workstations/:id/people/:userId',role('supervisor'),asyncRoute(async(req,res)=>{
   const station=await owned('workstation',req.params.id,req.auth!.orgId);
   const {assigned}=z.object({assigned:z.boolean()}).strict().parse(req.body);
-  const result=await db.user.updateMany({where:{id:req.params.userId,orgId:req.auth!.orgId,areaId:station.areaId,...(!assigned?{workstationId:station.id}:{})},data:{workstationId:assigned?station.id:null}});
-  if(!result.count)throw new HttpError(409,assigned?'User is not in this department':'User is not assigned to this workstation');
+  await changePerson(req.auth!.orgId,req.params.userId,{workstationId:assigned?station.id:null},assigned?undefined:station.id);
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.post('/api/dev/workstations/:id/cabinets/complete',role('admin'),asyncRoute(async(req,res)=>{
@@ -155,17 +155,22 @@ app.post('/api/settings/users',role('admin'),asyncRoute(async(req,res)=>{const d
 app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   const data=z.object({role:z.enum(['admin','supervisor','viewer']).optional(),areaId:z.string().uuid().nullable().optional(),workstationId:z.string().uuid().nullable().optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
   if(data.role!==undefined&&req.params.id===req.auth!.id)throw new HttpError(400,'Ask another administrator to change your role');
-  const user=await db.user.findFirst({where:{id:req.params.id,orgId:req.auth!.orgId},select:{areaId:true,workstationId:true}});
-  if(!user)throw new HttpError(404,'User not found');
-  if(data.areaId)await owned('area',data.areaId,req.auth!.orgId);
-  const nextArea=data.areaId===undefined?user.areaId:data.areaId;
-  if(data.workstationId){const station=await owned('workstation',data.workstationId,req.auth!.orgId);if(station.areaId!==nextArea)throw new HttpError(400,'Workstation must be in the user department');}
-  if(data.areaId!==undefined&&data.areaId!==user.areaId&&data.workstationId===undefined)data.workstationId=null;
-  const result=await db.user.updateMany({where:{id:req.params.id,orgId:req.auth!.orgId,areaId:user.areaId,workstationId:user.workstationId},data});
-  if(!result.count)throw new HttpError(409,'User assignment changed; refresh and try again');
+  await changePerson(req.auth!.orgId,req.params.id,data);
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
-app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({kind:z.enum(['shop','area','workstation']),name:z.string().min(1).max(100),parentId:z.string().uuid().optional()}).parse(req.body);const orgId=req.auth!.orgId;if(data.kind==='shop')res.json(await db.shop.create({data:{orgId,name:data.name}}));else {if(!data.parentId)throw new HttpError(400,'Parent required');await owned(data.kind==='area'?'shop':'area',data.parentId,orgId);res.json(data.kind==='area'?await db.area.create({data:{orgId,name:data.name,shopId:data.parentId}}):await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId}}));}}));
+app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{
+ const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional()}).strict().parse(req.body);
+ const orgId=req.auth!.orgId;
+ if(data.kind==='area'){
+  const shop=await db.shop.upsert({where:{orgId},create:{orgId,name:'Quality Craft Wood Works'},update:{name:'Quality Craft Wood Works'}});
+  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id}}));
+ }else{
+  if(!data.parentId)throw new HttpError(400,'Choose a department');
+  await owned('area',data.parentId,orgId);
+  res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId}}));
+ }
+ updates.emit(orgId);
+}));
 app.post('/api/settings/shifts',role('admin'),asyncRoute(async(req,res)=>{
   const data=z.object({id:z.string().uuid().optional(),name:z.string().min(1).max(100),startMinute:z.number().int().min(0).max(1439),endMinute:z.number().int().min(0).max(1439),breaks:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(1)})).max(20)}).parse(req.body);
   const length=(data.endMinute-data.startMinute+1440)%1440||1440;const sorted=[...data.breaks].sort((a,b)=>a.start-b.start);

@@ -5,6 +5,7 @@ import {dailySchedule,percentile,shiftWindow} from './domain';
 import {detectionDashboard} from './detection-dashboard';
 import {cabinetProgress} from './cabinet-progress';
 import {Prisma} from '@prisma/client';
+import {departmentProgress} from './department-progress';
 export async function dashboard(orgId:string,query:Record<string,any>){
   const org=await db.organization.findUniqueOrThrow({where:{id:orgId}});
   const [shops,areas,stations,shifts,devices,people]=await Promise.all([db.shop.findMany({where:{orgId}}),db.area.findMany({where:{orgId}}),db.workstation.findMany({where:{orgId}}),db.shift.findMany({where:{orgId}}),db.device.findMany({where:{orgId,archived:false}}),db.user.findMany({where:{orgId,workstationId:{not:null}},select:{id:true,name:true,workstationId:true}})]);
@@ -16,6 +17,7 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   const window=daily?{...daily,workingMs:0,elapsedMs:0}:shift?shiftWindow(date,org.timezone,shift):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0};
   const filtered=stations.filter(s=>(!query.area||s.areaId===query.area)&&(!query.shop||areas.find(a=>a.id===s.areaId)?.shopId===query.shop)&&(!query.workstation||s.id===query.workstation));
   const ids=filtered.map(s=>s.id);
+  const timerHistory=await db.rawEvent.groupBy({by:['workstationId'],where:{orgId,workstationId:{in:ids},type:'sensor.detection_time_snapshot'}});
   const where={orgId,ruleVersion:RULE_VERSION,workstationId:{in:ids},at:{gte:window.start,lt:window.end},...(query.product?{product:String(query.product)}:{})};
   // SQL aggregation keeps response size independent of event volume.
   const [grouped,cycleRows,hourly,notes,quality,unplaced,recent]=await Promise.all([
@@ -37,11 +39,12 @@ export async function dashboard(orgId:string,query:Record<string,any>){
     const durations=cycleRows.filter(c=>c.workstationId===s.id).map(c=>c.durationMs!);
     const count=group?group._sum.count??0:null;
     const timers=await detectionDashboard(orgId,ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end);
-    const timerOnly=timers.length>0&&ds.every(d=>(d.capabilities as string[]).includes('detection_time'));
+    const timerOnly=(timers.length>0||timerHistory.some(h=>h.workstationId===s.id))&&ds.every(d=>(d.capabilities as string[]).includes('detection_time'));
     const targetValue=daily?Math.round(s.target*daily.targetFactor):s.target;
     const expectedValue=daily?Math.floor(s.target*daily.expectedFactor):window.workingMs?Math.floor(s.target*window.elapsedMs/window.workingMs):0;
-    const cabinet=timerOnly?await cabinetProgress(ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs):null;
+    const cabinet=timerOnly?await cabinetProgress(null,s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs):null;
     return {...s,people:people.filter(p=>p.workstationId===s.id).map(({id,name})=>({id,name})),timerOnly,timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!),cabinet})),target:targetValue,count,expected:timerOnly?cabinet?.expected??0:expectedValue,cabinet,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
   }));
-  return {org,shops,areas,shifts,date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
+  const departments=areas.filter(a=>!query.shop||a.shopId===query.shop).map(a=>({...a,cabinet:departmentProgress(rows.filter(s=>s.areaId===a.id)),stationCount:rows.filter(s=>s.areaId===a.id).length}));
+  return {org,shops,areas,departments,workstations:stations.map(({id,name,areaId})=>({id,name,areaId})),shifts,date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
 }

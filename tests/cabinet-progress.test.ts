@@ -1,6 +1,6 @@
 import {it,expect,vi} from 'vitest';
 const {findMany}=vi.hoisted(()=>({findMany:vi.fn()}));
-vi.mock('../server/db',()=>({db:{rawEvent:{findMany}}}));
+vi.mock('../server/db',()=>({db:{rawEvent:{findMany},operatorAssignment:{findMany:vi.fn().mockResolvedValue([])}}}));
 import {cabinetProgress} from '../server/cabinet-progress';
 it('queries accepted snapshots and counts a short finished cabinet separately from an immediate start',async()=>{
  const base=Date.parse('2026-10-23T14:00:00Z');

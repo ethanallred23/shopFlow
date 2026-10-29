@@ -35,7 +35,7 @@ suite('first production administrator', () => {
     expect(await bcrypt.compare(input.password,admin.passwordHash)).toBe(true);
     expect(await createFirstAdmin(db,{...input,password:randomUUID()})).toBe(false);
     expect((await db.user.findUniqueOrThrow({where:{id:admin.id}})).passwordHash).toBe(admin.passwordHash);
-    expect(await db.shop.count()).toBe(0);
+    expect(await db.shop.count()).toBe(1);
     expect(await db.rawEvent.count()).toBe(0);
     await expect(db.shop.create({data:{orgId:randomUUID(),name:'Orphan'}})).rejects.toMatchObject({code:'P2003'});
     await expect(db.organization.delete({where:{id:admin.orgId}})).rejects.toMatchObject({code:'P2003'});

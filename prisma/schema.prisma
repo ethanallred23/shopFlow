@@ -20,12 +20,13 @@ model Organization {
   DetectionMeasurement_orgIdRows DetectionMeasurement[] @relation("DetectionMeasurement_orgId")
   Measurement_orgIdRows Measurement[] @relation("Measurement_orgId")
   Note_orgIdRows Note[] @relation("Note_orgId")
+  OperatorAssignment_orgIdRows OperatorAssignment[] @relation("OperatorAssignment_orgId")
 }
 model Shop {
   id String @id @default(uuid()) @db.VarChar(36)
   orgId String @db.VarChar(36)
   name String
-  @@index([orgId])
+  @@unique([orgId])
   orgIdRef Organization @relation("Shop_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   Area_shopIdRows Area[] @relation("Area_shopId")
 }
@@ -60,6 +61,7 @@ model Workstation {
   Measurement_workstationIdRows Measurement[] @relation("Measurement_workstationId")
   Note_workstationIdRows Note[] @relation("Note_workstationId")
   User_workstationIdRows User[] @relation("User_workstationId")
+  OperatorAssignment_workstationIdRows OperatorAssignment[] @relation("OperatorAssignment_workstationId")
 }
 model Shift {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -79,7 +81,7 @@ model User {
   passwordHash String
   role String @default("viewer")
   areaId String? @db.VarChar(36)
-  workstationId String? @db.VarChar(36)
+  workstationId String? @unique @db.VarChar(36)
   @@index([orgId])
   @@index([workstationId])
   @@index([areaId])
@@ -87,6 +89,21 @@ model User {
   areaIdRef Area? @relation("User_areaId", fields: [areaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   workstationIdRef Workstation? @relation("User_workstationId", fields: [workstationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   Session_userIdRows Session[] @relation("Session_userId")
+  OperatorAssignment_userIdRows OperatorAssignment[] @relation("OperatorAssignment_userId")
+}
+model OperatorAssignment {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  workstationId String @db.VarChar(36)
+  userId String @db.VarChar(36)
+  operatorName String
+  startedAt DateTime @default(now()) @db.DateTime(3)
+  endedAt DateTime? @db.DateTime(3)
+  @@index([orgId, workstationId, startedAt])
+  @@index([userId, startedAt])
+  orgIdRef Organization @relation("OperatorAssignment_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation @relation("OperatorAssignment_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  userIdRef User @relation("OperatorAssignment_userId", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model Session {
   id String @id @db.VarChar(64)

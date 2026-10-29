@@ -20,6 +20,7 @@ export async function createFirstAdmin(db: PrismaClient, input: z.input<typeof a
     if (rows[0].completed || await tx.user.count({where: {role: 'admin'}})) return false;
     if (await tx.organization.count()) throw new Error('An organization already exists without an administrator. Resolve this explicitly; first-admin setup will not duplicate it.');
     const org = await tx.organization.create({data: {name: values.organization, timezone: values.timezone, demo: false}});
+    await tx.shop.create({data:{orgId:org.id,name:'Quality Craft Wood Works'}});
     await tx.user.create({data: {orgId: org.id, email: values.email, name: values.name, passwordHash, role: 'admin'}});
     await tx.bootstrapState.update({where: {id: 'first-admin'}, data: {completed: true}});
     return true;

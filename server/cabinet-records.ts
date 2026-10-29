@@ -6,6 +6,8 @@ export type CabinetRecord = {
   id: string; number: number; deviceId: string; startedAt: string | null; finishedAt: string | null;
   durationMs: number; status: 'building' | 'paused' | 'completed' | 'interrupted';
   lastReportedAt: string; stale: boolean;
+  operatorId?:string|null;operatorName?:string|null;completedById?:string|null;completedByName?:string|null;
+  stationName?:string;stationId?:string;
 };
 
 // Samples must be accepted measurements in ingestion order. Repeated snapshots update
