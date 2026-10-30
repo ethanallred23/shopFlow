@@ -2,14 +2,18 @@ import {db} from './db';
 import {RULE_VERSION} from './ingestion';
 import {cabinetRecords, CabinetRecord} from './cabinet-records';
 import {attributeCabinets} from './operator-attribution';
+import {expectedAtPace,paceProjection} from './cabinet-pace';
+
+export type PaceSchedule={paceMs:number;workingAt:(at:Date)=>number;breakPoints:Date[]};
 
 export type CabinetProgress={
   target:number;started:number;completed:number;active:boolean;currentBuildMs:number;buildMs:number;nonBuildMs:number;
   averageBuildMs:number;remaining:number;remainingShiftMs:number;requiredMsPerCabinet:number;expected:number;onTrack:boolean;progressPct:number;
-  timeline:Array<{at:string;actual:number;expected:number}>;cabinets:CabinetRecord[];
+  timeline:Array<{at:string;actual?:number;expected:number;projected?:number}>;cabinets:CabinetRecord[];
+  desiredPaceMs?:number;projectedTotal?:number|null;shiftEndAt?:string;
 };
 
-export async function cabinetProgress(deviceIds:string[]|null,workstationId:string,start:Date,end:Date,target:number,workingMs:number,elapsedMs:number,includeOperators=true):Promise<CabinetProgress>{
+export async function cabinetProgress(deviceIds:string[]|null,workstationId:string,start:Date,end:Date,target:number,workingMs:number,elapsedMs:number,includeOperators=true,pace?:PaceSchedule):Promise<CabinetProgress>{
   const until=new Date(Math.min(Date.now(),end.getTime()));
   const before=new Date(start.getTime()-24*60*60*1000);
   // Separate disjoint clock branches so each can use its time-range index instead
@@ -31,9 +35,19 @@ export async function cabinetProgress(deviceIds:string[]|null,workstationId:stri
   // Do not extrapolate from wall time: paused/offline devices must not accrue phantom work.
   const buildMs=Math.min(Math.max(0,elapsedMs),cabinets.filter(c=>c.startedAt&&Date.parse(c.startedAt)>=start.getTime()).reduce((sum,c)=>sum+c.durationMs,0));
   const remaining=Math.max(0,target-completed),remainingShiftMs=Math.max(0,workingMs-elapsedMs);
-  const expectedAt=(elapsed:number)=>workingMs?Math.min(target,Math.floor(target*elapsed/workingMs)):0;
+  const expectedAt=(elapsed:number)=>pace?expectedAtPace(elapsed,pace.paceMs):workingMs?Math.min(target,Math.floor(target*elapsed/workingMs)):0;
   const expected=expectedAt(elapsedMs);
-  const timeline=[{at:start.toISOString(),actual:0,expected:0},...finished.sort((a,b)=>a.finishedAt!.localeCompare(b.finishedAt!)).map((c,i)=>({at:c.finishedAt!,actual:i+1,expected:expectedAt(Math.max(0,Date.parse(c.finishedAt!)-start.getTime()))}))];
-  if(until>=start)timeline.push({at:until.toISOString(),actual:completed,expected});
-  return {target,started:cabinets.length,completed,active:inProgress.length>0,currentBuildMs:inProgress.reduce((sum,c)=>sum+c.durationMs,0),buildMs,nonBuildMs:Math.max(0,elapsedMs-buildMs),averageBuildMs:completed?Math.round(finished.reduce((sum,c)=>sum+c.durationMs,0)/completed):0,remaining,remainingShiftMs,requiredMsPerCabinet:remaining?Math.round(remainingShiftMs/remaining):0,expected,onTrack:completed>=expected,progressPct:target?Math.min(100,completed/target*100):0,timeline,cabinets};
+  const projectedTotal=pace?paceProjection(completed,workingMs,elapsedMs):null;
+  let timeline:Array<{at:string;actual?:number;expected:number;projected?:number}>;
+  if(pace){
+    const points=[...new Set([start.getTime(),until.getTime(),end.getTime(),...pace.breakPoints.map(p=>p.getTime()),...finished.map(c=>Date.parse(c.finishedAt!))])].filter(t=>t>=start.getTime()&&t<=end.getTime()).sort((a,b)=>a-b);
+    timeline=points.map(time=>{
+      const at=new Date(time),current=time<=until.getTime();
+      return {at:at.toISOString(),...(current?{actual:finished.filter(c=>Date.parse(c.finishedAt!)<=time).length}:{}),expected:expectedAt(pace.workingAt(at)),...(projectedTotal!==null&&time>=until.getTime()?{projected:time===until.getTime()?completed:projectedTotal}:{})};
+    });
+  }else{
+    timeline=[{at:start.toISOString(),actual:0,expected:0},...finished.sort((a,b)=>a.finishedAt!.localeCompare(b.finishedAt!)).map((c,i)=>({at:c.finishedAt!,actual:i+1,expected:expectedAt(Math.max(0,Date.parse(c.finishedAt!)-start.getTime()))}))];
+    if(until>=start)timeline.push({at:until.toISOString(),actual:completed,expected});
+  }
+  return {target,started:cabinets.length,completed,active:inProgress.length>0,currentBuildMs:inProgress.reduce((sum,c)=>sum+c.durationMs,0),buildMs,nonBuildMs:Math.max(0,elapsedMs-buildMs),averageBuildMs:completed?Math.round(finished.reduce((sum,c)=>sum+c.durationMs,0)/completed):0,remaining,remainingShiftMs,requiredMsPerCabinet:pace?.paceMs??(remaining?Math.round(remainingShiftMs/remaining):0),expected,onTrack:completed>=expected,progressPct:target?Math.min(100,completed/target*100):0,timeline,cabinets,...(pace?{desiredPaceMs:pace.paceMs,projectedTotal,shiftEndAt:end.toISOString()}:{})};
 }

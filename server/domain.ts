@@ -44,15 +44,19 @@ export function shiftWindow(date:string,zone:string,s:Schedule,now=new Date()){
   const end=endDay.set({hour:Math.floor(s.endMinute/60),minute:s.endMinute%60});
   const pauses=(s.breaks as {start:number;end:number}[]).map(b=>({start:start.plus({minutes:b.start}).toMillis(),end:Math.min(end.toMillis(),start.plus({minutes:b.end}).toMillis())}));
   const working=(until:number)=>Math.max(0,Math.min(until,end.toMillis())-start.toMillis()-pauses.reduce((n,b)=>n+Math.max(0,Math.min(until,b.end)-Math.max(start.toMillis(),b.start)),0));
-  return {start:start.toJSDate(),end:end.toJSDate(),workingMs:working(end.toMillis()),elapsedMs:working(now.getTime())};
+  return {start:start.toJSDate(),end:end.toJSDate(),workingMs:working(end.toMillis()),elapsedMs:working(now.getTime()),workingAt:(at:Date)=>working(at.getTime()),breakPoints:pauses.flatMap(b=>[new Date(b.start),new Date(b.end)])};
 }
 export function percentile(xs:number[],p:number){if(!xs.length)return null;const a=[...xs].sort((a,b)=>a-b);return a[Math.max(0,Math.ceil(a.length*p)-1)];}
-export function dailySchedule(date:string,zone:string,shifts:Schedule[],now=new Date()){
+export function dailySchedule(date:string,zone:string,shifts:Schedule[],now=new Date(),resolveShift?:(date:string,shift:Schedule)=>Schedule){
   const day=DateTime.fromISO(date,{zone}).startOf('day');const start=day.toJSDate(),end=day.plus({days:1}).toJSDate();
   let targetFactor=0,expectedFactor=0,workingMs=0,elapsedMs=0;
+  const breakPoints:Date[]=[];
   for(const dayOffset of [-1,0])for(const shift of shifts){
-    const w=shiftWindow(day.plus({days:dayOffset}).toISODate()!,zone,shift,now);
-    const workingUntil=(until:Date)=>shiftWindow(day.plus({days:dayOffset}).toISODate()!,zone,shift,until).elapsedMs;
+    const shiftDate=day.plus({days:dayOffset}).toISODate()!;
+    const effective=resolveShift?.(shiftDate,shift)??shift;
+    const w=shiftWindow(shiftDate,zone,effective,now);
+    breakPoints.push(w.start,w.end,...w.breakPoints);
+    const workingUntil=(until:Date)=>shiftWindow(shiftDate,zone,effective,until).elapsedMs;
     if(w.workingMs){
       const scheduled=workingUntil(end)-workingUntil(start);
       const elapsed=workingUntil(new Date(Math.max(start.getTime(),Math.min(end.getTime(),now.getTime()))))-workingUntil(start);
@@ -62,6 +66,6 @@ export function dailySchedule(date:string,zone:string,shifts:Schedule[],now=new 
       elapsedMs+=elapsed;
     }
   }
-  return {start,end,targetFactor,expectedFactor,workingMs,elapsedMs};
+  return {start,end,targetFactor,expectedFactor,workingMs,elapsedMs,breakPoints:breakPoints.filter(point=>point>=start&&point<=end),workingAt:(at:Date)=>dailySchedule(date,zone,shifts,at,resolveShift).elapsedMs};
 }
 export function can(role:string,required:'viewer'|'supervisor'|'admin'){return ['viewer','supervisor','admin'].indexOf(role)>=['viewer','supervisor','admin'].indexOf(required);}

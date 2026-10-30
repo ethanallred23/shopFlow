@@ -36,6 +36,7 @@ model Area {
   shopId String @db.VarChar(36)
   name String
   dailyTarget Int @default(0)
+  cabinetPaceMs Int @default(600000)
   themeColor String @default("#287f83")
   themeMode String @default("light")
   @@index([orgId, shopId])
@@ -73,8 +74,21 @@ model Shift {
   startMinute Int
   endMinute Int
   breaks Json
+  ShiftDaySchedule_shiftIdRows ShiftDaySchedule[] @relation("ShiftDaySchedule_shiftId")
   @@index([orgId])
   orgIdRef Organization @relation("Shift_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model ShiftDaySchedule {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  shiftId String @db.VarChar(36)
+  date String @db.VarChar(10)
+  startMinute Int
+  endMinute Int
+  breaks Json
+  @@unique([shiftId, date])
+  @@index([orgId, date])
+  shiftIdRef Shift @relation("ShiftDaySchedule_shiftId", fields: [shiftId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 model User {
   id String @id @default(uuid()) @db.VarChar(36)

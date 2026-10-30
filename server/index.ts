@@ -115,9 +115,15 @@ app.get('/api/devices/:id/events',role('supervisor'),asyncRoute(async(req,res)=>
 app.get('/api/devices/:id/assignments',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.assignment.findMany({where:{deviceId:req.params.id},orderBy:{startedAt:'desc'},take:100}));}));
 app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
 app.patch('/api/departments/:id/target',role('supervisor'),asyncRoute(async(req,res)=>{await owned('area',req.params.id,req.auth!.orgId);const {dailyTarget}=z.object({dailyTarget:z.number().int().min(0).max(100000000)}).strict().parse(req.body);const area=await db.area.update({where:{id:req.params.id},data:{dailyTarget}});updates.emit(req.auth!.orgId);res.json(area);}));
+app.patch('/api/departments/:id/pace',role('supervisor'),asyncRoute(async(req,res)=>{
+  await owned('area',req.params.id,req.auth!.orgId);
+  const {paceMinutes}=z.object({paceMinutes:z.number().int().min(1).max(240)}).strict().parse(req.body);
+  const area=await db.area.update({where:{id:req.params.id},data:{cabinetPaceMs:paceMinutes*60000}});
+  updates.emit(req.auth!.orgId);res.json(area);
+}));
 app.patch('/api/departments/:id',role('admin'),asyncRoute(async(req,res)=>{
   await owned('area',req.params.id,req.auth!.orgId);
-  const data=z.object({name:z.string().trim().min(1).max(100),dailyTarget:z.number().int().min(0).max(100000000),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color'),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
+  const data=z.object({name:z.string().trim().min(1).max(100).optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color').optional(),themeMode:z.enum(['light','dark']).optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
   const area=await db.area.update({where:{id:req.params.id},data});
   updates.emit(req.auth!.orgId);res.json(area);
 }));
@@ -167,15 +173,16 @@ app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{
- const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
+ const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),paceMinutes:z.number().int().min(1).max(240).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
  const orgId=req.auth!.orgId;
  if(data.kind==='area'){
   const shop=await db.shop.upsert({where:{orgId},create:{orgId,name:'Quality Craft Wood Works'},update:{name:'Quality Craft Wood Works'}});
-  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,themeColor:data.themeColor??'#287f83',themeMode:data.themeMode??'light'}}));
+  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,cabinetPaceMs:(data.paceMinutes??10)*60000,themeColor:data.themeColor??'#287f83',themeMode:data.themeMode??'light'}}));
  }else{
   if(!data.parentId)throw new HttpError(400,'Choose a department');
   await owned('area',data.parentId,orgId);
   if(data.dailyTarget!==undefined)throw new HttpError(400,'Set the goal on the department');
+  if(data.paceMinutes!==undefined)throw new HttpError(400,'Set the cabinet pace on the department');
   if(data.themeColor!==undefined)throw new HttpError(400,'Set the theme color on the department');
   if(data.themeMode!==undefined)throw new HttpError(400,'Set the theme mode on the department');
   res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId,target:0}}));
@@ -187,6 +194,20 @@ app.post('/api/settings/shifts',role('admin'),asyncRoute(async(req,res)=>{
   const length=(data.endMinute-data.startMinute+1440)%1440||1440;const sorted=[...data.breaks].sort((a,b)=>a.start-b.start);
   if(sorted.some((b,i)=>b.end<=b.start||b.end>length||(i>0&&b.start<sorted[i-1].end)))throw new HttpError(400,'Breaks must be within the shift and cannot overlap');
   const {id,...values}=data;if(id){const result=await db.shift.updateMany({where:{id,orgId:req.auth!.orgId},data:values});if(!result.count)throw new HttpError(404,'Shift not found');res.json({ok:true});}else res.json(await db.shift.create({data:{...values,orgId:req.auth!.orgId}}));
+}));
+app.post('/api/shifts/:id/schedule',role('supervisor'),asyncRoute(async(req,res)=>{
+  const data=z.object({scope:z.enum(['date','daily']),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),startMinute:z.number().int().min(0).max(1439),endMinute:z.number().int().min(0).max(1439),breaks:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(1),label:z.string().trim().min(1).max(40).optional()}).strict()).max(20)}).strict().parse(req.body);
+  if(!DateTime.fromISO(data.date).isValid)throw new HttpError(400,'Invalid schedule date');
+  const shift=await db.shift.findFirst({where:{id:req.params.id,orgId:req.auth!.orgId}});
+  if(!shift)throw new HttpError(404,'Shift not found');
+  const length=(data.endMinute-data.startMinute+1440)%1440||1440;
+  const sorted=[...data.breaks].sort((a,b)=>a.start-b.start);
+  if(sorted.some((b,i)=>b.end<=b.start||b.end>length||(i>0&&b.start<sorted[i-1].end)))throw new HttpError(400,'Breaks must fall within the shift and cannot overlap');
+  const values={startMinute:data.startMinute,endMinute:data.endMinute,breaks:sorted};
+  if(data.scope==='daily'){
+    await db.$transaction(async tx=>{await tx.shift.update({where:{id:shift.id},data:values});await tx.shiftDaySchedule.deleteMany({where:{shiftId:shift.id,date:data.date}});});
+  }else await db.shiftDaySchedule.upsert({where:{shiftId_date:{shiftId:shift.id,date:data.date}},create:{...values,orgId:req.auth!.orgId,shiftId:shift.id,date:data.date},update:values});
+  updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.use(express.static(resolve('dist')));app.get('*',(_req,res)=>res.sendFile(resolve('dist/index.html')));
 app.use((err:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{const status=err instanceof z.ZodError?400:err.status??(err.code==='P2002'?409:500);if(status===500)log.error({code:err.code},'Internal request failure');res.status(status).json({error:err instanceof z.ZodError?err.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; '):status===500?'Service unavailable. Check database connection.':err.message});});

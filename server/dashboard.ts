@@ -7,6 +7,8 @@ import {cabinetProgress} from './cabinet-progress';
 import {Prisma} from '@prisma/client';
 import {departmentProgress} from './department-progress';
 import {shiftTarget,splitTarget} from './department-target';
+import {paceTarget} from './cabinet-pace';
+import {scheduledShift} from './shift-schedule';
 export async function dashboard(orgId:string,query:Record<string,any>){
   const org=await db.organization.findUniqueOrThrow({where:{id:orgId}});
   const [shops,areas,stations,shifts,devices,people]=await Promise.all([db.shop.findMany({where:{orgId}}),db.area.findMany({where:{orgId}}),db.workstation.findMany({where:{orgId}}),db.shift.findMany({where:{orgId}}),db.device.findMany({where:{orgId,archived:false}}),db.user.findMany({where:{orgId,workstationId:{not:null}},select:{id:true,name:true,workstationId:true}})]);
@@ -14,9 +16,13 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   const shift=shifts.find(s=>s.id===query.shift)||shifts.find(s=>{const m=localNow.hour*60+localNow.minute;return s.endMinute<=s.startMinute?m>=s.startMinute||m<s.endMinute:m>=s.startMinute&&m<s.endMinute;})||shifts[0];
   const date=query.date || (shift && shift.endMinute<=shift.startMinute && localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}):localNow).toISODate();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!DateTime.fromISO(date).isValid)throw new HttpError(400,'Invalid date');
-  const daily=query.period==='day'?dailySchedule(date,org.timezone,shifts):null;
-  const window=daily?daily:shift?shiftWindow(date,org.timezone,shift):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0};
-  const shiftWeights=shifts.map(s=>({id:s.id,workingMs:shiftWindow(date,org.timezone,s).workingMs}));
+  const previousDate=DateTime.fromISO(date).minus({days:1}).toISODate()!;
+  const overrides=await db.shiftDaySchedule.findMany({where:{orgId,date:{in:[date,previousDate]}}});
+  const effective=(day:string,s:typeof shifts[number])=>scheduledShift(s,day,overrides);
+  const effectiveShifts=shifts.map(s=>effective(date,s));
+  const daily=query.period==='day'?dailySchedule(date,org.timezone,shifts,new Date(),(day,s)=>effective(day,s as typeof shifts[number])):null;
+  const window=daily?daily:shift?shiftWindow(date,org.timezone,effective(date,shift)):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0,workingAt:(_at:Date)=>0,breakPoints:[] as Date[]};
+  const shiftWeights=effectiveShifts.map(s=>({id:s.id,workingMs:shiftWindow(date,org.timezone,s).workingMs}));
   const stationTargets=new Map<string,number>();
   for(const area of areas){
     const goal=daily||!shift?area.dailyTarget:shiftTarget(area.dailyTarget,shiftWeights,shift.id);
@@ -47,11 +53,12 @@ export async function dashboard(orgId:string,query:Record<string,any>){
     const count=group?group._sum.count??0:null;
     const timers=await detectionDashboard(orgId,ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end);
     const timerOnly=(timers.length>0||timerHistory.some(h=>h.workstationId===s.id))&&ds.every(d=>(d.capabilities as string[]).includes('detection_time'));
-    const targetValue=stationTargets.get(s.id)??0;
+    const area=areas.find(a=>a.id===s.areaId)!;
+    const targetValue=timerOnly?paceTarget(window.workingMs,area.cabinetPaceMs):stationTargets.get(s.id)??0;
     const expectedValue=window.workingMs?Math.floor(targetValue*window.elapsedMs/window.workingMs):0;
-    const cabinet=timerOnly?await cabinetProgress(null,s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs):null;
+    const cabinet=timerOnly?await cabinetProgress(null,s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs,true,{paceMs:area.cabinetPaceMs,workingAt:window.workingAt,breakPoints:window.breakPoints}):null;
     return {...s,people:people.filter(p=>p.workstationId===s.id).map(({id,name})=>({id,name})),timerOnly,timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!),cabinet})),target:targetValue,count,expected:timerOnly?cabinet?.expected??0:expectedValue,cabinet,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
   }));
   const departments=areas.filter(a=>!query.shop||a.shopId===query.shop).map(a=>({...a,cabinet:departmentProgress(rows.filter(s=>s.areaId===a.id)),stationCount:rows.filter(s=>s.areaId===a.id).length}));
-  return {org,shops,areas,departments,workstations:stations.map(({id,name,areaId})=>({id,name,areaId})),shifts,date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
+  return {org,shops,areas,departments,workstations:stations.map(({id,name,areaId})=>({id,name,areaId})),shifts:effectiveShifts,baseShifts:shifts,shiftOverrides:overrides.filter(o=>o.date===date),date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
 }
