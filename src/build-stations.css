@@ -108,3 +108,14 @@
 @keyframes station-start-icon{0%{opacity:.3;transform:translateY(3px) rotate(-12deg) scale(.75)}45%{opacity:1;transform:translateY(-2px) rotate(4deg) scale(1.18)}100%{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
 @keyframes station-start-timer{0%{opacity:.25;transform:translateY(5px) scale(.96)}45%{opacity:1;transform:translateY(-1px) scale(1.035)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @media(prefers-reduced-motion:reduce){.build-station-card>.build-station-surface,.build-station-card>.build-station-surface::after,.build-station-card>.build-station-start-burst,.build-station-card.just-started .build-station-state>svg,.build-station-card.just-started .build-station-current-time>strong{animation:none;transition:none}.build-station-card>.build-station-start-burst{display:none}}
+
+/* Disconnected stations keep their history, but connection state overrides health. */
+.department-view .build-station-card.offline{--speed-color:#707784;--offline-muted:#59616e;--offline-line:#c2c7cf;--offline-badge:#dde1e7;--offline-ink:#414956;background:#eef0f3;border-color:var(--offline-line);border-top-color:var(--speed-color);color:#303743;box-shadow:none}
+.department-view.theme-dark .build-station-card.offline{--speed-color:#b3b9c3;--offline-muted:#bcc2cb;--offline-line:#535a65;--offline-badge:#414751;--offline-ink:#e2e5eb;background:#2c3139;color:#eceef2}
+.department-view .build-station-card.offline :is(.build-station-number,.build-station-speed>div>span,.build-station-current-time>span,.build-station-desired small,.build-station-state small,.build-station-footer>span,.build-station-speed-caption,.build-station-speed-caption>span:first-child,.build-station-state>svg){color:var(--offline-muted)}
+.department-view .build-station-card.offline .build-station-health,.department-view .build-station-card.offline .build-station-open{background:var(--offline-badge);color:var(--offline-ink);border-color:var(--offline-line)}
+.department-view .build-station-card.offline .build-station-desired strong{color:inherit}
+.department-view .build-station-card.offline :is(.build-station-current,.build-station-footer){border-color:var(--offline-line)}
+.department-view .build-station-card.offline .build-station-speed-track{background:var(--offline-badge)}
+.department-view .build-station-card.offline :is(.build-station-speed-track>i,.build-station-speed-caption i){border-color:var(--offline-muted)}
+.department-view .build-station-card.offline>.build-station-surface{visibility:hidden;opacity:0;box-shadow:none}

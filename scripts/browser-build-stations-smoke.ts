@@ -25,9 +25,11 @@ try{
    const status=index===1?'paused':phase==='completed'?'completed':phase==='paused'?'paused':'building';
    const cabinet={id:station.id+':fixture',deviceId:'fixture-'+index,number:index+1,stationId:station.id,stationName:station.name,startedAt:new Date(Date.now()-270000).toISOString(),finishedAt:status==='completed'?new Date().toISOString():null,
     status,stale:phase==='offline'&&index===0,durationMs:270000,lastReportedAt:new Date().toISOString(),operatorName:station.people[0]?.name};
-   station.status=phase==='offline'&&index===0?'offline':'online';
+   station.status=phase==='offline'?['data unavailable','offline','no device'][index]:'online';
+   station.devices=phase==='offline'&&index===2?0:1;
    station.cabinet={...station.cabinet,completed:index===2?0:24,averageBuildMs:index===2?0:index===0?270000:630000,desiredPaceMs:600000,cabinets:index===2?[]:[cabinet]};
   });
+  data.stations=stations;
   for(const department of [...data.areas,...data.departments])if(department.id===area.id){department.themeMode=themeMode;department.cabinetPaceMs=600000;if(department.cabinet)department.cabinet={...department.cabinet,desiredPaceMs:600000,cabinets:stations.flatMap((s:any)=>s.cabinet.cabinets)};}
   await route.fulfill({response,json:data});
  });
@@ -58,9 +60,32 @@ try{
  await expect(first).toHaveClass(/ready/);
  phase='offline';await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(first).toHaveClass(/offline/);
- await expect(first).toContainText('Device offline');
+ await expect(first.locator('.build-station-health')).toHaveAccessibleName('Station offline');
+ await expect(first).toContainText('Disconnected');
+ await expect(third).toContainText('No device connected');
+ for(const card of [first,second,third]){
+  await expect(card).toHaveClass(/offline/);
+  await expect(card).not.toHaveClass(/health-tinted/);
+  await expect(card.locator('.build-station-health')).toHaveAccessibleName('Station offline');
+  expect(await card.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).visibility)).toBe('hidden');
+ }
+ await expect.poll(()=>cards.evaluateAll(elements=>new Set(elements.map(element=>getComputedStyle(element).borderTopColor)).size)).toBe(1);
+ const neutralColors=await cards.evaluateAll(elements=>elements.map(element=>({background:getComputedStyle(element).backgroundColor,border:getComputedStyle(element).borderTopColor,bar:getComputedStyle(element.querySelector('.build-station-speed-track>span')!).backgroundColor})));
+ expect(new Set(neutralColors.map(colors=>colors.background)).size).toBe(1);
+ expect(new Set(neutralColors.map(colors=>colors.border)).size).toBe(1);
+ expect(neutralColors.every(colors=>colors.bar===colors.border)).toBe(true);
+ await page.locator('.build-stations').screenshot({path:'.local/build-stations-offline-dark.png'});
+ const frozenTime=await first.locator('.build-station-current-time strong').textContent();
+ await page.waitForTimeout(1100);
+ await expect(first.locator('.build-station-current-time strong')).toHaveText(frozenTime!);
  expect(await first.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationPlayState)).toBe('paused');
+ themeMode='light';await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ await expect(page.locator('.department-view')).toHaveClass(/theme-light/);
+ await page.locator('.build-stations').screenshot({path:'.local/build-stations-offline-light.png'});
+ expect(new Set(await cards.evaluateAll(elements=>elements.map(element=>getComputedStyle(element).backgroundColor))).size).toBe(1);
  phase='building';themeMode='light';await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ await expect(first).toHaveClass(/building.*health-tinted/);
+ await expect(first.locator('.build-station-health')).toHaveAccessibleName('Within desired pace');
  await expect(page.locator('.department-view')).toHaveClass(/theme-light/);
  await page.locator('.build-stations').screenshot({path:'.local/build-stations-light.png'});
  await page.emulateMedia({reducedMotion:'reduce'});
