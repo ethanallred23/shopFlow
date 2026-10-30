@@ -1,0 +1,45 @@
+import 'dotenv/config';
+import {chromium,expect} from '@playwright/test';
+import {mkdirSync} from 'node:fs';
+import {db} from '../server/db';
+
+const origin=process.env.APP_ORIGIN??'http://127.0.0.1:5173';
+if(!['localhost','127.0.0.1','[::1]'].includes(new URL(origin).hostname)||process.env.NODE_ENV!=='development')throw new Error('Run this check against the local development app.');
+const user=await db.user.findUniqueOrThrow({where:{email:process.env.SEED_EMAIL??''}});
+const area=await db.area.findFirstOrThrow({where:{orgId:user.orgId,name:'Cabinet simulation'}});
+await db.$disconnect();
+mkdirSync('.local',{recursive:true});
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1500,height:1100}});
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ const login=await page.request.post(origin+'/api/login',{headers:{Origin:origin},data:{email:process.env.SEED_EMAIL,password:process.env.SEED_PASSWORD}});
+ if(!login.ok())throw new Error('Local seed login failed: HTTP '+login.status());
+ await page.goto(origin+'/');
+ await expect(page.getByRole('heading',{name:'Cabinet simulation cabinet progress'})).toBeVisible();
+ await expect(page).toHaveURL(new RegExp('department='+area.id));
+ await page.getByRole('button',{name:'All departments',exact:true}).click();
+ await expect(page.locator('.department-grid')).toBeVisible();
+ await page.getByRole('button',{name:'Show active cabinets'}).click();
+ await expect(page.getByRole('heading',{name:'Cabinet simulation cabinet progress'})).toBeVisible();
+ await page.getByLabel('Shift start date').fill('2000-01-01');
+ await page.getByRole('button',{name:'Show active cabinets'}).click();
+ await expect(page.getByLabel('Shift start date')).not.toHaveValue('2000-01-01');
+ await expect(page.locator('.active-cabinet-card.building').first()).toBeVisible();
+ const before=await page.locator('.active-cabinet-card.building .active-cabinet-time strong').first().textContent();
+ await expect.poll(async()=>page.locator('.active-cabinet-card.building .active-cabinet-time strong').first().textContent()).not.toBe(before);
+ await page.screenshot({path:'.local/cabinet-simulation-desktop.png',fullPage:true});
+ await page.getByRole('tab',{name:'Graph',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Output outlook'})).toBeVisible();
+ await expect(page.getByText('On course for',{exact:true}).first()).toBeVisible();
+ await page.screenshot({path:'.local/cabinet-simulation-graph.png',fullPage:true});
+ await page.getByRole('tab',{name:'Summary',exact:true}).click();
+ await expect(page.locator('.active-cabinet-card.paused').first()).toBeVisible({timeout:35000});
+ await expect(page.locator('.active-cabinet-card.complete').first()).toBeVisible({timeout:65000});
+ await page.screenshot({path:'.local/cabinet-simulation-completion.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:'.local/cabinet-simulation-mobile.png',fullPage:true});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(errors).toEqual([]);
+ console.log('Local cabinet simulation passed: homepage opens live cabinets, preview button resets old filters, live timers, pause, completion animation, projected graph, and mobile layout.');
+}finally{await browser.close();}

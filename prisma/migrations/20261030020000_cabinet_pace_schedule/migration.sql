@@ -12,4 +12,4 @@ CREATE TABLE `ShiftDaySchedule` (
   INDEX `ShiftDaySchedule_orgId_date_idx` (`orgId`, `date`),
   PRIMARY KEY (`id`),
   CONSTRAINT `ShiftDaySchedule_shiftId_fkey` FOREIGN KEY (`shiftId`) REFERENCES `Shift`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

@@ -216,5 +216,10 @@ if(process.env.NODE_ENV!=='test'){
   const host=process.env.HOST??'127.0.0.1';
   const server=app.listen(port,host,()=>log.info({host,port},'ShopFlow API listening'));
   server.requestTimeout=15000;server.headersTimeout=10000;server.setTimeout(30000);
+  if(process.env.NODE_ENV==='development'&&process.env.LOCAL_CABINET_SIMULATION==='1'){
+    log.info('Starting local cabinet simulation');
+    void import('./local-cabinet-simulation').then(({startLocalCabinetSimulation})=>startLocalCabinetSimulation(orgId=>updates.emit(orgId)))
+      .catch(()=>log.error('Local cabinet simulation could not start. Use a localhost demo database and run db:migrate and db:seed.'));
+  }
 }
 

@@ -76,7 +76,9 @@ npm.cmd test
 
 With the development server running, `npm.cmd run test:browser` exercises the vertical slice in installed Microsoft Edge using the configured seed login. It creates a clearly named smoke-test sensor in the demo organization, sends events, archives that sensor, and writes screenshots under ignored `.local/`.
 
-To preview the Biltoki cabinet workflow locally, run `npm.cmd run demo:biltoki` once after seeding. It adds a clearly labeled example timer workstation with two completed cabinet intervals and one active interval; rerunning the command is safe and does not duplicate it.
+For a live cabinet preview while editing CSS, set `LOCAL_CABINET_SIMULATION=1` in your local `.env` and run `npm.cmd run dev`. The local homepage opens the **Cabinet simulation** department automatically. The **Show active cabinets** button returns to that preview and clears old date and shift filters; you can also use the department link printed in the API terminal. Three simulated workstations repeatedly build, pause, resume, and complete cabinets every 30–60 seconds, with existing completions in the log and graph. Live updates trigger the normal completion animation, and Vite refreshes your CSS as you edit. The preview requires `NODE_ENV=development`, a database on localhost, and the demo account created by `db:seed`. It preserves your preview department's theme and pace settings across restarts. Set the flag to `0` and restart to stop; simulated history remains available. No Arduino is needed.
+
+For a static Biltoki example instead, run `npm.cmd run demo:biltoki` once after seeding. It adds a clearly labeled example timer workstation with two completed cabinet intervals and one active interval; rerunning the command is safe and does not duplicate it.
 
 Database tests are intentionally opt-in. Use a disposable MySQL database, run migrations against it, then:
 

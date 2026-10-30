@@ -43,7 +43,8 @@ export async function cabinetProgress(deviceIds:string[]|null,workstationId:stri
     const points=[...new Set([start.getTime(),until.getTime(),end.getTime(),...pace.breakPoints.map(p=>p.getTime()),...finished.map(c=>Date.parse(c.finishedAt!))])].filter(t=>t>=start.getTime()&&t<=end.getTime()).sort((a,b)=>a-b);
     timeline=points.map(time=>{
       const at=new Date(time),current=time<=until.getTime();
-      return {at:at.toISOString(),...(current?{actual:finished.filter(c=>Date.parse(c.finishedAt!)<=time).length}:{}),expected:expectedAt(pace.workingAt(at)),...(projectedTotal!==null&&time>=until.getTime()?{projected:time===until.getTime()?completed:projectedTotal}:{})};
+      const projected=projectedTotal===null?undefined:completed+(projectedTotal-completed)*Math.max(0,pace.workingAt(at)-elapsedMs)/Math.max(1,workingMs-elapsedMs);
+      return {at:at.toISOString(),...(current?{actual:finished.filter(c=>Date.parse(c.finishedAt!)<=time).length}:{}),expected:expectedAt(pace.workingAt(at)),...(projected!==undefined&&time>=until.getTime()?{projected:Math.round(projected*10)/10}:{})};
     });
   }else{
     timeline=[{at:start.toISOString(),actual:0,expected:0},...finished.sort((a,b)=>a.finishedAt!.localeCompare(b.finishedAt!)).map((c,i)=>({at:c.finishedAt!,actual:i+1,expected:expectedAt(Math.max(0,Date.parse(c.finishedAt!)-start.getTime()))}))];

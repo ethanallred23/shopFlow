@@ -1,5 +1,7 @@
 import {DateTime} from 'luxon';
 import {db} from './db';
+import {shiftWindow} from './domain';
+import {scheduledShift} from './shift-schedule';
 
 type Context={deviceId:string;orgId:string;workstationId:string|null};
 type Report=(fields:Record<string,unknown>)=>void;
@@ -14,7 +16,15 @@ async function calculate(context:Context,report:Report){
     db.organization.findUniqueOrThrow({where:{id:context.orgId},select:{timezone:true}})
   ]);
   const localNow=DateTime.now().setZone(org.timezone);
-  const shift=shifts.find(s=>{const m=localNow.hour*60+localNow.minute;return s.endMinute<=s.startMinute?m>=s.startMinute||m<s.endMinute:m>=s.startMinute&&m<s.endMinute;});
+  const today=localNow.toISODate()!;
+  const yesterday=localNow.minus({days:1}).toISODate()!;
+  const overrides=await db.shiftDaySchedule.findMany({where:{orgId:context.orgId,date:{in:[today,yesterday]}}});
+  const now=new Date();
+  const shift=[today,yesterday].some(date=>shifts.some(s=>{
+    const effective=scheduledShift(s,date,overrides);
+    const window=shiftWindow(date,org.timezone,effective,now);
+    return now>=window.start&&now<window.end;
+  }));
   if(!shift)return 0;
   const area=await db.area.findUniqueOrThrow({where:{id:station.areaId},select:{cabinetPaceMs:true}});
   report({stage:'pace_configuration',ms:Math.round(performance.now()-started)});

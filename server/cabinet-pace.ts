@@ -3,7 +3,7 @@ export function paceTarget(workingMs:number,paceMs:number):number{
 }
 
 export function paceProjection(completed:number,workingMs:number,elapsedMs:number):number|null{
- if(completed<=0||elapsedMs<=0)return null;
+ if(elapsedMs<=0)return null;
  return Math.max(completed,Math.round(completed*workingMs/elapsedMs));
 }
 

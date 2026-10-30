@@ -13,11 +13,22 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   const org=await db.organization.findUniqueOrThrow({where:{id:orgId}});
   const [shops,areas,stations,shifts,devices,people]=await Promise.all([db.shop.findMany({where:{orgId}}),db.area.findMany({where:{orgId}}),db.workstation.findMany({where:{orgId}}),db.shift.findMany({where:{orgId}}),db.device.findMany({where:{orgId,archived:false}}),db.user.findMany({where:{orgId,workstationId:{not:null}},select:{id:true,name:true,workstationId:true}})]);
   const localNow=DateTime.now().setZone(org.timezone);
-  const shift=shifts.find(s=>s.id===query.shift)||shifts.find(s=>{const m=localNow.hour*60+localNow.minute;return s.endMinute<=s.startMinute?m>=s.startMinute||m<s.endMinute:m>=s.startMinute&&m<s.endMinute;})||shifts[0];
-  const date=query.date || (shift && shift.endMinute<=shift.startMinute && localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}):localNow).toISODate();
+  const today=localNow.toISODate()!;
+  const requestedDate=query.date||today;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)||!DateTime.fromISO(requestedDate).isValid)throw new HttpError(400,'Invalid date');
+  const previousRequestedDate=DateTime.fromISO(requestedDate).minus({days:1}).toISODate()!;
+  const overrides=await db.shiftDaySchedule.findMany({where:{orgId,date:{in:[requestedDate,previousRequestedDate]}}});
+  const current=query.shift?null:[requestedDate,previousRequestedDate].flatMap(day=>shifts.map(shift=>({shift,day}))).find(({shift,day})=>{
+    const window=shiftWindow(day,org.timezone,scheduledShift(shift,day,overrides));
+    return new Date()>=window.start&&new Date()<window.end;
+  });
+  const shift=shifts.find(s=>s.id===query.shift)||current?.shift||shifts[0];
+  const date=query.date||current?.day||today;
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!DateTime.fromISO(date).isValid)throw new HttpError(400,'Invalid date');
   const previousDate=DateTime.fromISO(date).minus({days:1}).toISODate()!;
-  const overrides=await db.shiftDaySchedule.findMany({where:{orgId,date:{in:[date,previousDate]}}});
+  if(previousDate!==previousRequestedDate){
+    overrides.push(...await db.shiftDaySchedule.findMany({where:{orgId,date:previousDate}}));
+  }
   const effective=(day:string,s:typeof shifts[number])=>scheduledShift(s,day,overrides);
   const effectiveShifts=shifts.map(s=>effective(date,s));
   const daily=query.period==='day'?dailySchedule(date,org.timezone,shifts,new Date(),(day,s)=>effective(day,s as typeof shifts[number])):null;
@@ -60,5 +71,7 @@ export async function dashboard(orgId:string,query:Record<string,any>){
     return {...s,people:people.filter(p=>p.workstationId===s.id).map(({id,name})=>({id,name})),timerOnly,timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!),cabinet})),target:targetValue,count,expected:timerOnly?cabinet?.expected??0:expectedValue,cabinet,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};
   }));
   const departments=areas.filter(a=>!query.shop||a.shopId===query.shop).map(a=>({...a,cabinet:departmentProgress(rows.filter(s=>s.areaId===a.id)),stationCount:rows.filter(s=>s.areaId===a.id).length}));
-  return {org,shops,areas,departments,workstations:stations.map(({id,name,areaId})=>({id,name,areaId})),shifts:effectiveShifts,baseShifts:shifts,shiftOverrides:overrides.filter(o=>o.date===date),date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
+  const simulationStation=process.env.NODE_ENV==='development'&&process.env.LOCAL_CABINET_SIMULATION==='1'&&org.demo?stations.find(s=>s.job==='LOCAL-CABINET-SIMULATION'):undefined;
+  const localSimulation=simulationStation?{departmentId:simulationStation.areaId,running:devices.some(d=>d.firmware==='LOCAL-CABINET-SIMULATION'&&deviceStatus(d)==='online')}:undefined;
+  return {org,...(localSimulation?{localSimulation}:{}),shops,areas,departments,workstations:stations.map(({id,name,areaId})=>({id,name,areaId})),shifts:effectiveShifts,baseShifts:shifts,shiftOverrides:overrides.filter(o=>o.date===date),date,shiftId:shift?.id,window,stations:rows,devices:devices.map(d=>({...d,status:deviceStatus(d)})),hourly:hourly.map(h=>({hour:DateTime.fromSQL(String(h.hour),{zone:'utc'}).setZone(org.timezone).toFormat('HH:mm'),count:Number(h.count)})),cycles:cycleRows.slice(0,100).reverse().map(c=>({at:c.at,durationMs:c.durationMs})),notes,recent,quality,unplaced:unplaced._sum.count??0,cycleSampleLimited:cycleRows.length===10000};
 }
