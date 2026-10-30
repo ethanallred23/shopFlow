@@ -38,6 +38,7 @@ await page.route('**/api/**',async route=>{
 try{
  await page.goto('http://127.0.0.1:5176/?department=department');
  await expect(page.getByRole('heading',{name:'Assembly cabinet progress'})).toBeVisible();
+ await page.locator('.department-detail-sections>summary').click();
  await expect(page.getByRole('heading',{name:'Workstation pace',level:2})).toBeVisible();
  await expect(page.locator('.cabinet-metrics>div:first-child strong')).toContainText('12');
  await expect(page.locator('.build-station-card')).toHaveCount(2);

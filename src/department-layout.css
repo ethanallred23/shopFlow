@@ -1,0 +1,138 @@
+/* Operational information stays together; analysis and history follow it. */
+.view-layout-controls{padding:12px 0!important;border-top:1px solid #bed0cc!important;border-bottom:1px solid #bed0cc!important}
+.view-layout-controls legend{display:flex;align-items:center;gap:6px}
+.view-customizer-menu .view-layout-controls label{flex-direction:column;align-items:stretch;gap:5px;padding:7px 0;font-weight:650}
+.view-customizer-menu .view-layout-controls select{width:100%;padding:7px 9px;background:#fff;border:1px solid #b4cacc;border-radius:6px;color:#17232a;font-size:12px}
+.view-customizer-menu .reset-view-layout{padding:6px 9px;margin-top:7px;font-size:11px}
+.department-view.theme-dark .view-layout-controls{border-color:#476167!important}
+.department-view.theme-dark .view-customizer-menu .view-layout-controls select{background:#263d46;border-color:#557078;color:#eef7f5}
+.department-view.theme-dark .reset-view-layout{background:#294149;border-color:#557078;color:#eef7f5}
+.cabinet-overview{display:flex;flex-direction:column;gap:14px;margin-top:16px;min-width:0}
+.cabinet-overview>div{min-width:0}
+.cabinet-overview>div:empty{display:none}
+.cabinet-overview .build-stations,.cabinet-overview .station-pace-board{margin:0}
+.cabinet-overview[data-arrangement="numbers-first"] .overview-numbers{order:-1}
+.cabinet-overview[data-arrangement="side-by-side"]{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);grid-template-areas:'stations numbers' 'stations pace';align-items:start}
+.overview-stations{grid-area:stations}.overview-numbers{grid-area:numbers}.overview-pace{grid-area:pace}.overview-speed{grid-area:speed}
+.cabinet-overview[data-arrangement="side-by-side"]:not(:has(.overview-stations>*)){display:flex}
+.department-detail-sections{margin:12px 0;border:1px solid #bdd1cf;border-radius:10px;padding:12px 14px}
+.department-detail-sections>summary{cursor:pointer;font-size:13px;font-weight:700;color:inherit}
+.department-detail-sections>.panel{margin-top:14px}
+.department-top-refresh{display:none}
+.department-view.theme-dark .department-detail-sections{border-color:#39515a;background:#172730}
+
+/* Compact station cards use horizontal space for the live timer and average. */
+.station-health-short{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .station-health-full{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .station-health-short{display:inline}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]){padding:12px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading{align-items:center;gap:10px;margin-bottom:10px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading h3{font-size:18px;margin:0}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading .build-kicker{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading p{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-grid{gap:10px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-card{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);grid-template-areas:'title title' 'operator health' 'speed current' 'track track' 'caption count';gap:6px 10px;padding:10px;border-radius:11px;align-content:start}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-top{grid-area:title;min-width:0}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-number{font-size:8px;letter-spacing:.08em}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-top h4{font-size:16px;margin-top:3px;line-height:1.2}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-open{width:27px;height:27px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-operator{grid-area:operator;margin:0;font-size:10px;gap:4px;align-self:center}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-operator svg{width:12px;height:12px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-health{grid-area:health;justify-self:end;align-self:center;font-size:9px;line-height:1.3;padding:4px 5px;gap:4px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-health svg{width:12px;height:12px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed{grid-area:speed;flex-direction:column;margin:4px 0 0;align-items:start;gap:5px;min-width:0}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed>div>span{font-size:7px;letter-spacing:.03em;line-height:1.3}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed>div>strong{font-size:25px;letter-spacing:-.7px;margin-top:5px;white-space:nowrap}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed .build-station-desired{display:flex;align-items:baseline;gap:4px;text-align:left;flex-wrap:wrap}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed .build-station-desired strong{font-size:12px;margin:0;letter-spacing:0}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-desired small{font-size:8px;margin-top:2px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-current{grid-area:current;flex-direction:column-reverse;align-items:flex-end;justify-content:flex-end;gap:5px;min-height:0;padding:4px 0 0;border:0;text-align:right}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-current-time>span{font-size:7px;letter-spacing:.03em}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-current-time strong{font-size:25px;margin-top:4px;letter-spacing:-.8px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-state{gap:4px;align-items:center;justify-content:flex-end}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-state>svg{width:13px;height:13px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-state strong{font-size:9px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-state small{font-size:8px;margin-top:1px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) :is(.ready,.offline) .build-station-state small{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed-track{grid-area:track;height:9px;margin:2px 0 0;align-self:center}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed-track>i{top:-3px;bottom:-3px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed-caption{grid-area:caption;margin:0;min-height:0;align-self:center;font-size:9px;line-height:1.25}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed-caption>span:last-child{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-footer{grid-area:count;justify-content:flex-end;gap:6px;padding:0;border:0;align-self:center}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-footer>span{font-size:9px;line-height:1.2}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-footer svg{display:none}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-footer>strong{font-size:22px}
+.department-view .build-stations[data-density="compact"] .build-station-card{gap:10px 12px;padding:15px}
+.department-view .build-stations[data-density="compact"] .build-station-top h4{font-size:18px}
+
+/* Override the old full-screen billboard sizes with readable dashboard sizes. */
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]){padding:14px;margin:12px 0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]):fullscreen{padding:16px 20px;margin:0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading{max-width:none;gap:12px;margin:0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading h2{font-size:22px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading p{font-size:11px;margin-top:4px}
+.department-view .cabinet-progress[data-density="fit"] .cabinet-heading p{display:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading-actions{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-overview{gap:10px;margin-top:12px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics{max-width:none;margin:0;gap:8px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics>div{padding:8px;border-radius:9px;box-shadow:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics span{font-size:10px;gap:4px;line-height:1.25}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics span>svg{width:12px;height:12px;flex-shrink:0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics strong{font-size:24px;line-height:1.1;margin-top:5px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics small{display:inline;font-size:9px;line-height:1.2;margin:0 0 0 5px;letter-spacing:0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .customizable-metrics .section-hide-button{right:3px;top:3px;width:20px;height:20px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .customizable-metrics .section-hide-button svg{width:12px;height:12px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .section-visibility-heading{margin:0;font-size:11px;min-height:22px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .section-visibility-heading .section-hide-button{width:24px;height:24px}
+.department-view .cabinet-progress[data-density="fit"] .cabinet-pace-section{position:relative}
+.department-view .cabinet-progress[data-density="fit"] .section-visibility-heading{position:absolute;right:0;top:-4px;min-height:0;height:0}
+.department-view .cabinet-progress[data-density="fit"] .section-visibility-heading>span{display:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-progress-track{width:100%;max-width:none;height:11px;margin:24px 0 10px;box-shadow:none}
+.department-view .cabinet-progress[data-density="fit"] .cabinet-progress-track{margin:22px 0 8px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-target-marker{height:23px;top:-6px;width:2px;box-shadow:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-target-marker b{top:-19px;padding:0;border-radius:0;background:none;box-shadow:none;font-size:9px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-foot{margin:0;padding:0;background:none;max-width:none;font-size:10px;font-weight:500;box-shadow:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-board{padding:10px;border-radius:10px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-heading{margin-bottom:7px;align-items:center}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-heading h3{font-size:13px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-heading p{display:none}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-counts{gap:5px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-counts strong{font-size:9px;padding:4px 6px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-list{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px;max-height:none;overflow:visible;padding:0}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-row{padding:8px 10px;gap:4px 7px;border-radius:8px;border-left-width:3px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-identity strong{font-size:11px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-identity small,.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-numbers span{font-size:9px;margin-top:2px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-numbers strong{font-size:17px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-numbers small{font-size:9px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-row .pace-status{font-size:9px;padding:3px 5px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-view-toggle{display:flex;width:max-content;margin:12px 0 8px;gap:2px;align-self:initial}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-view-toggle button{font-size:11px;padding:6px 9px}
+.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-chart{max-width:none;margin-top:14px}
+
+/* Reduce repeated page chrome in Fit screen mode, without changing the live data. */
+@media(min-width:851px){
+ .app:has(.department-view.layout-fit) .topbar{height:40px;padding:0 22px}
+ .app:has(.department-view.layout-fit) .department-top-refresh{display:inline-flex;padding:5px 7px;font-size:11px}
+ .content:has(.department-view.layout-fit){max-width:none;padding:12px 18px 0}
+ .content:has(.department-view.layout-fit)>.page-heading{display:none}
+ .content:has(.department-view.layout-fit)>.local-simulation-banner{margin-bottom:8px;padding:5px 12px;gap:10px}
+ .content:has(.department-view.layout-fit)>.local-simulation-banner p{display:none}
+ .content:has(.department-view.layout-fit)>.local-simulation-banner button{padding:4px 8px;font-size:10px}
+ .content:has(.department-view.layout-fit)>.filters{margin-bottom:8px;padding:5px 10px;gap:8px}
+ .content:has(.department-view.layout-fit)>.filters input,.content:has(.department-view.layout-fit)>.filters select{padding:5px 7px}
+ .content:has(.department-view.layout-fit)>.department-back{padding:3px 9px;font-size:11px;margin-bottom:3px}
+ .department-view.layout-fit{padding:0;border-radius:12px}
+ .department-view.layout-fit .department-intro{padding:8px 12px;gap:12px;margin:4px 0 10px;border-radius:12px}
+ .department-view.layout-fit .department-intro>div:first-child{display:flex;align-items:center;flex-wrap:wrap;gap:4px 14px;flex:1}
+ .department-view.layout-fit .department-intro h2{font-size:21px;margin:0}
+ .department-view.layout-fit .department-intro p{font-size:11px;margin:0}
+ .department-view.layout-fit .department-eyebrow,.department-view.layout-fit .department-share{display:none}
+ .department-view.layout-fit .department-controls{margin:0;gap:6px}
+ .department-view.layout-fit .department-controls .department-configure{font-size:10px;padding:5px 8px;min-height:26px}
+ .department-view.layout-fit .view-customizer>summary{font-size:10px;padding:5px 9px;min-height:26px}
+ .department-view.layout-fit .department-pulse{gap:5px;max-width:240px;justify-content:flex-end}
+ .department-view.layout-fit .department-pulse>span{padding:4px;gap:4px;font-size:9px;border-radius:7px}
+ .department-view.layout-fit .department-pulse svg{width:13px;height:13px}
+}
+@media(max-width:850px){.cabinet-overview[data-arrangement="side-by-side"]{display:flex}.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading{flex-wrap:wrap}.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-heading h2{font-size:19px}}
+@media(max-width:600px){.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]){padding:12px}.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .cabinet-metrics{grid-template-columns:repeat(auto-fit,minmax(115px,1fr))}.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading{align-items:start}.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:10px;gap:7px}.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed>div>strong{font-size:22px}.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed .build-station-desired strong{font-size:16px}.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-current-time strong{font-size:21px}.department-view .cabinet-progress:is([data-density="fit"],[data-density="compact"]) .station-pace-list{grid-template-columns:1fr}}

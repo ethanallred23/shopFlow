@@ -41,7 +41,7 @@ try{
  await expect(first.locator('.build-station-desired')).toContainText('10m');
  await expect(first.locator('.build-station-footer strong')).toHaveText('24');
  await expect(second).toHaveClass(/paused.*speed-slow/);
- await expect(second.locator('.build-station-health')).toHaveText('Slower than desired pace');
+ await expect(second.locator('.build-station-health')).toHaveAccessibleName('Slower than desired pace');
  await expect(second.locator('.build-station-speed')).toContainText('10m 30s');
  await expect(third).toHaveClass(/ready.*speed-unknown/);
  await expect(third).toContainText('Ready for next cabinet');

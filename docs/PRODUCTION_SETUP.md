@@ -71,4 +71,18 @@ The command fails immediately at the first unsuccessful step and does not restar
 
 The new integrity migration adds 29 restrictive foreign keys. On an older database, orphan rows cause the migration to fail rather than being deleted. Review and repair those records using your backup and an explicit data-repair plan before resuming the failed migration. Existing unique indexes (including event retry identities), primary keys, nullability and foreign keys are installed from the migration history on an empty database. Relations restrict deletion of referenced historical data; tenant authorization remains enforced by the application.
 
+### Recover the cabinet pace migration (P3009)
+
+If Prisma names `20261030020000_cabinet_pace_schedule` as failed, updating the migration file or pulling Git changes does not clear the failed attempt stored in the server database. This migration may already have added `Area.cabinetPaceMs` before creating `ShiftDaySchedule` failed. Re-running its first statement would then produce a duplicate-column error.
+
+Deploy the release containing the repair command, use the deployment database credentials described above, and run:
+
+```sh
+npm run db:repair:pace -- --check
+npm run db:repair:pace
+npm run db:migrate
+```
+
+The first command is an optional read-only check. The repair preserves existing tables, rows, and pace values; it adds only missing steps from this migration. It verifies the required columns, defaults, indexes, and cascading foreign key before using Prisma's `migrate resolve --applied` to clear the failed migration. An already repaired database is left unchanged. Other failed migrations or incompatible existing definitions stop the repair instead of being overwritten or marked complete. For the original database error and schema details, run `npx tsx scripts/check-pace-migration.ts`.
+
 Ordinary reruns do not delete data, create duplicate configuration, reseed demo data, or reset passwords. Schema deployment and database restoration are separate operations; rollback of application files alone does not undo a migration.

@@ -31,7 +31,7 @@ try{
  await page.screenshot({path:'.local/cabinet-simulation-desktop.png',fullPage:true});
  await page.getByRole('tab',{name:'Graph',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Output outlook'})).toBeVisible();
- await expect(page.locator('.cabinet-chart [data-metric="metricProjection"]')).toBeVisible();
+ await expect(page.locator('.overview-numbers [data-metric="metricProjection"]')).toBeVisible();
  await page.screenshot({path:'.local/cabinet-simulation-graph.png',fullPage:true});
  await page.getByRole('tab',{name:'Summary',exact:true}).click();
  await expect(page.locator('.build-station-card.paused').first()).toBeVisible({timeout:35000});

@@ -26,6 +26,7 @@ try{
  await page.getByRole('button',{name:'Hide Build stations',exact:true}).click();
  await page.getByRole('button',{name:'Hide Cabinet log',exact:true}).click();
  await page.getByRole('button',{name:'Hide Station speed summary',exact:true}).click();
+ await page.locator('.department-detail-sections>summary').click();
  await page.getByRole('button',{name:'Hide Workstation details table',exact:true}).click();
  await page.getByRole('button',{name:'Hide Operator activity',exact:true}).click();
  await expect(page.locator('.build-stations,.cabinet-history,.station-pace-board')).toHaveCount(0);
@@ -34,7 +35,7 @@ try{
  await expect(page.locator('[data-metric]')).toHaveCount(5);
  await expect(page.locator('.build-stations,.cabinet-history,.station-pace-board')).toHaveCount(0);
  await openMenu();
- expect(await customizer.locator('label').first().evaluate(element=>element.getBoundingClientRect().height)).toBeLessThan(45);
+ expect(await customizer.locator('label:has(input[type="checkbox"])').first().evaluate(element=>element.getBoundingClientRect().height)).toBeLessThan(45);
  await expect(customizer.getByRole('checkbox',{name:'Completed',exact:true})).not.toBeChecked();
  await page.screenshot({path:'.local/department-customize-dark.png',fullPage:true});
  await customizer.getByRole('checkbox',{name:'Cabinet log',exact:true}).check();
