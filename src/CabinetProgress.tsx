@@ -1,8 +1,9 @@
 import {Area,CartesianGrid,Line,ComposedChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
-import {ArrowUpRight,BarChart3,Gauge,HardHat,LayoutDashboard,Maximize2,Minimize2,PackageCheck,Timer,TrendingUp} from 'lucide-react';
+import {ArrowUpRight,BarChart3,Gauge,LayoutDashboard,Maximize2,Minimize2,PackageCheck,Timer,TrendingUp} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import './cabinet.css';
-import {visibleBuildMs,visibleCurrentBuildMs} from './live-build-time';
+import {visibleBuildMs} from './live-build-time';
+import {ActiveCabinets} from './ActiveCabinets';
 
 const duration=(ms:number|null)=>{if(ms===null)return '—';const totalMinutes=Math.floor(ms/60000),hours=Math.floor(totalMinutes/60),minutes=totalMinutes%60;return hours?`${hours}h ${String(minutes).padStart(2,'0')}m`:`${minutes}m`;};
 const buildDuration=(ms:number)=>{const seconds=Math.floor(ms/1000);return `${Math.floor(seconds/3600)}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;};
@@ -30,8 +31,6 @@ export function CabinetProgress({progress,compact=false,devMode=false,onSimulate
  useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===frame.current);document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync);},[]);
  useEffect(()=>{if(!progress?.cabinets?.some((c:any)=>c.status==='building'&&!c.stale))return;setNowMs(Date.now());const timer=setInterval(()=>setNowMs(Date.now()),1000);return()=>clearInterval(timer);},[progress]);
  if(!progress)return null;
- const activeCabinets=(progress.cabinets??[]).filter((c:any)=>c.status==='building'||c.status==='paused');
- const displayedBuildMs=visibleCurrentBuildMs(activeCabinets,nowMs);
  const recentCabinets=[...(progress.cabinets??[])].sort((a:any,b:any)=>{
   if((a.status==='completed')!==(b.status==='completed'))return a.status==='completed'?-1:1;
   return Date.parse(b.finishedAt??b.lastReportedAt)-Date.parse(a.finishedAt??a.lastReportedAt)||b.number-a.number;
@@ -58,8 +57,8 @@ export function CabinetProgress({progress,compact=false,devMode=false,onSimulate
  const summary=<>{metrics}{progressBar}</>;
  return <section ref={frame} className={'cabinet-progress mood-'+status+(department?' department-theme':'')+(compact?' compact':'')}>
   {!compact&&<div className="cabinet-heading"><div><h2><PackageCheck size={19}/> {title||'Cabinet progress'}</h2><p>{department?'Combined cabinet output across this department. Its daily goal is divided across shifts and workstations.':'Follow each cabinet from start to completion.'}</p></div><div className="cabinet-heading-actions"><span className={'pace-status '+status}>{status==='ahead'?'Ahead of pace':status==='on-time'?'On pace':'Behind pace'}</span><button className="panel-fullscreen" onClick={toggle} title={fullscreen?'Exit full screen':'Show cabinet progress full screen'}>{fullscreen?<Minimize2 size={16}/>:<Maximize2 size={16}/>}</button></div></div>}
-  {progress.active&&<div className={'build-in-progress'+(progress.cabinets?.some((c:any)=>c.status==='building'&&!c.stale)?'':' is-still')} role="status"><div className="build-visual" aria-hidden="true"><span className="build-orbit"/><span className="build-builder"><HardHat size={30} strokeWidth={1.8}/></span></div><div><span className="build-kicker">ON THE FLOOR</span><strong>{progress.cabinets?.some((c:any)=>c.status==='building'&&!c.stale)?(department?`${progress.cabinets.filter((c:any)=>c.status==='building'&&!c.stale).length} cabinets in progress`:'Cabinet in progress'):progress.cabinets?.some((c:any)=>c.status==='paused'&&!c.stale)?'Cabinet paused':'Last reported: cabinet in progress'}</strong><small>Build time {buildDuration(displayedBuildMs)}</small></div><span className="build-pulse" aria-hidden="true"><i/><i/><i/></span></div>}
-  <CompletionNotice cabinets={progress.cabinets??[]}/>
+  <ActiveCabinets cabinets={progress.cabinets??[]} nowMs={nowMs} department={department} onStation={openStation}/>
+  {!department&&<CompletionNotice cabinets={progress.cabinets??[]}/>}
   <div className="cabinet-view-toggle" role="tablist" aria-label="Cabinet progress view"><button className={view==='summary'?'active':''} onClick={()=>setView('summary')} role="tab" aria-selected={view==='summary'}><LayoutDashboard size={15}/> Summary</button><button className={view==='graph'?'active':''} onClick={()=>setView('graph')} role="tab" aria-selected={view==='graph'}><BarChart3 size={15}/> Graph</button></div>
   {devMode&&onSimulate&&<div className="cabinet-dev-controls"><button className="cabinet-dev-toggle" onClick={()=>{setTestCompleted(String(progress.completed));setTestError('');setTestNotice('');setEditTest(!editTest)}}>{editTest?'Close test controls':'Developer testing'}</button>{editTest&&<form className="cabinet-dev-form" onSubmit={async e=>{e.preventDefault();setSimulating(true);setTestError('');setTestNotice('');try{await onSimulate(Number(testCompleted));setTestNotice(`Test progress set to ${testCompleted} completed cabinets.`);}catch(error:any){setTestError(error.message||'Could not update test progress.');}finally{setSimulating(false);}}}><label>Simulated cabinets completed<input disabled={simulating} type="number" min="0" max={progress.target} value={testCompleted} onChange={e=>setTestCompleted(e.target.value)}/></label><span>Set the count to expected now ({progress.expected}) to preview on-pace colors.</span><button className="cabinet-dev-apply" type="submit" disabled={simulating||testCompleted===''||Number(testCompleted)>progress.target}>{simulating?'Updating…':'Apply test progress'}</button>{simulating&&<span role="status">Saving test events…</span>}{testNotice&&<span className="cabinet-test-success" role="status">{testNotice}</span>}{testError&&<span className="cabinet-test-error" role="alert">{testError}</span>}</form>}</div>}
   {view==='graph'?graph:summary}

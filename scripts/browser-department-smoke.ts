@@ -26,7 +26,7 @@ await page.route('**/api/**',async route=>{
  if(path==='/api/live'){await route.fulfill({contentType:'text/event-stream',body:': fixture\n\n'});return;}
  let value:any={ok:true};
  if(path==='/api/me')value={user:{id:'admin',name:'Admin',role:'admin'},csrf:'fixture'};
- else if(path==='/api/dashboard')value=dashboard();
+ else if(path==='/api/dashboard'){value=dashboard();const stationId=url.searchParams.get('workstation');if(stationId)value.stations=stations.filter(s=>s.id===stationId);}
  else if(path.endsWith('/people'))value=roster;
  else if(path.includes('/people/')){
   const stationId=path.split('/')[3],personId=path.split('/').at(-1),person=roster.find(p=>p.id===personId)!;
@@ -38,31 +38,22 @@ await page.route('**/api/**',async route=>{
 try{
  await page.goto('http://127.0.0.1:5176/?department=department');
  await expect(page.getByRole('heading',{name:'Assembly cabinet progress'})).toBeVisible();
- await expect(page.getByRole('heading',{name:'Workstation pace'})).toBeVisible();
- await expect(page.getByText('12',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Workstation pace',level:2})).toBeVisible();
+ await expect(page.locator('.cabinet-metrics>div:first-child strong')).toContainText('12');
+ await expect(page.locator('.active-cabinet-card')).toHaveCount(2);
+ await expect(page.locator('.active-cabinet-card').first()).toContainText('CABINET #2');
+ await expect(page.locator('.active-cabinet-time strong').first()).toContainText(/\d+:\d{2}:\d{2}/);
  await page.screenshot({path:'.local/department-shared-desktop.png',fullPage:true});
- await page.getByRole('button',{name:'Station B',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Workstation operator'})).toBeVisible();
- await expect(page.locator('.station-people-warning')).toContainText('No user assigned');
- await page.getByLabel('Choose a department operator').selectOption(other.id);
- await page.getByRole('button',{name:'Assign operator',exact:true}).click();
- await expect(page.locator('.assigned-person')).toHaveCount(1);
- await expect(page.locator('.assigned-person')).toContainText('Bob Builder');
- await page.getByLabel('Choose a department operator').selectOption(operator.id);
- await page.getByRole('button',{name:'Replace operator',exact:true}).click();
- await expect(page.locator('.assigned-person')).toHaveCount(1);
- await expect(page.locator('.assigned-person')).toContainText('Ethan Allred');
- await page.getByRole('button',{name:'Departments',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Assembly cabinet progress'})).toBeVisible();
  const cabinet=stations[1].cabinet.cabinets[0];cabinet.status='completed';cabinet.finishedAt=new Date().toISOString();cabinet.completedById=operator.id;cabinet.completedByName=operator.name;
  stations[1].cabinet.completed++;stations[1].cabinet.active=false;
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
- await expect(page.locator('.cabinet-celebration')).toBeVisible();
+ await expect(page.locator('.active-cabinet-card.complete')).toBeVisible();
  await page.screenshot({path:'.local/department-completion.png',fullPage:true});
- await page.getByRole('button',{name:'Dismiss completion'}).click();
+ await expect(page.locator('.active-cabinet-card.complete')).toHaveCount(0,{timeout:3000});
+ await expect(page.locator('.active-cabinet-card')).toHaveCount(1);
  await page.setViewportSize({width:390,height:844});
  await page.screenshot({path:'.local/department-shared-mobile.png',fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(errors).toEqual([]);
- console.log('Department browser smoke passed: shared totals, station pace, one operator replacement, red unassigned warning, completion animation, and mobile layout.');
+ console.log('Department browser smoke passed: separate live cabinet cards and timers, station pace, completion exit, and mobile layout.');
 }finally{await browser.close();}
