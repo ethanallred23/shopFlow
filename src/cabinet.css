@@ -94,10 +94,11 @@
 /* The department color owns the surface; pace colors stay readable signals. */
 .cabinet-progress.department-theme{--glow:color-mix(in srgb,var(--department-color) 28%,white);--soft:color-mix(in srgb,var(--department-color) 11%,white);--edge:color-mix(in srgb,var(--department-color) 32%,white);--ink:#233b43;--pace:#16865e}
 .cabinet-progress.department-theme.mood-behind{--pace:#c72e24}
+.cabinet-progress.department-theme.mood-unknown{--pace:#6f858c}
 .cabinet-progress.department-theme .cabinet-progress-track>span{background:linear-gradient(90deg,var(--pace),color-mix(in srgb,var(--pace) 68%,white))}
 .cabinet-progress.department-theme .cabinet-heading h2,.cabinet-progress.department-theme .cabinet-heading h2 svg{color:color-mix(in srgb,var(--department-color) 75%,#172f38)}
-.cabinet-progress.department-theme .cabinet-metrics>div:first-child{border-color:#91d8af;background:linear-gradient(145deg,#f2fbf5,#fff)}
-.cabinet-progress.department-theme .cabinet-metrics>div:first-child strong{color:#16865e}
+.cabinet-progress.department-theme .cabinet-metrics>div.metric-completed{border-color:#91d8af;background:linear-gradient(145deg,#f2fbf5,#fff)}
+.cabinet-progress.department-theme .cabinet-metrics>div.metric-completed strong{color:#16865e}
 .cabinet-progress.department-theme .cabinet-target-marker{background:color-mix(in srgb,var(--department-color) 70%,#172f38)}
 .cabinet-progress.department-theme .cabinet-chart-legend .actual{background:var(--pace)}
 .cabinet-progress.department-theme .station-pace-row.behind{border-left-color:#c72e24;background:#fff3ef}
@@ -125,14 +126,15 @@
 .department-view.theme-light .cabinet-progress.department-theme{--ink:#17232a;color:#17232a}
 .department-view.theme-light .cabinet-progress.department-theme .cabinet-heading h2,.department-view.theme-light .cabinet-progress.department-theme .cabinet-heading h2 svg{color:#17232a}
 .department-view.theme-light .cabinet-progress.department-theme .cabinet-heading p,.department-view.theme-light .cabinet-progress.department-theme .cabinet-chart-heading p,.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics span,.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics small{color:#33464d}
-.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics>div:not(:first-child) strong{color:#17232a}
+.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics>div:not(.metric-completed) strong{color:#17232a}
 .department-view.theme-dark .cabinet-progress.department-theme{--ink:#eef5f6;--edge:color-mix(in srgb,var(--department-color) 30%,#3c5660);--soft:color-mix(in srgb,var(--department-color) 18%,#12222c);--glow:color-mix(in srgb,var(--department-color) 30%,#14232c);--pace:#8fe0ae;background:radial-gradient(ellipse at 100% 0%,var(--glow),transparent 65%),linear-gradient(135deg,#101d25,var(--soft));color:#eef5f6}
 .department-view.theme-dark .cabinet-progress.department-theme.mood-behind{--pace:#ff594d}
+.department-view.theme-dark .cabinet-progress.department-theme.mood-unknown{--pace:#a9bdc2}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading h2,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading h2 svg{color:#f4f8f8}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-chart-heading p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-chart-legend,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-graph-footer,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-history p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-foot{color:#c2d1d4}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div{background:linear-gradient(145deg,#20333d,#192a34);border-color:var(--edge)}
-.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div:first-child{background:linear-gradient(145deg,#183d35,#1a2e35);border-color:#42866b}
-.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics strong,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div:first-child strong{color:#f4f8f8}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div.metric-completed{background:linear-gradient(145deg,#183d35,#1a2e35);border-color:#42866b}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics strong,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div.metric-completed strong{color:#f4f8f8}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics span,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics small{color:#c9d8d9}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-view-toggle{background:#1b2e38;border-color:#47616a}
 .department-view.theme-dark .cabinet-progress.department-theme .cabinet-view-toggle button{color:#c5d6d9}

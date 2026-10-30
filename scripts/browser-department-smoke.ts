@@ -7,7 +7,7 @@ import {mkdirSync} from 'node:fs';
 const start=new Date(Date.now()-3600000),finish=new Date(Date.now()+3600000);
 const operator={id:'operator-a',name:'Ethan Allred',workstationId:'station-a' as string|null};
 const other={id:'operator-b',name:'Bob Builder',workstationId:null as string|null};
-const build=(deviceId:string,completed:number):CabinetProgress=>({target:10,started:completed+1,completed,active:true,currentBuildMs:120000,buildMs:completed*120000,nonBuildMs:1000,averageBuildMs:120000,remaining:10-completed,remainingShiftMs:3600000,requiredMsPerCabinet:360000,expected:5,onTrack:completed>=5,progressPct:completed*10,timeline:[{at:start.toISOString(),actual:0,expected:0},{at:new Date().toISOString(),actual:completed,expected:5}],cabinets:[{id:deviceId+'-cabinet',deviceId,number:1,startedAt:new Date(Date.now()-120000).toISOString(),finishedAt:null,durationMs:120000,status:'building',lastReportedAt:new Date().toISOString(),stale:false,operatorId:operator.id,operatorName:operator.name,completedById:null,completedByName:null}]});
+const build=(deviceId:string,completed:number):CabinetProgress=>({target:10,started:completed+1,completed,active:true,currentBuildMs:120000,buildMs:completed*120000,nonBuildMs:1000,averageBuildMs:120000,remaining:10-completed,remainingShiftMs:3600000,requiredMsPerCabinet:600000,desiredPaceMs:600000,expected:5,onTrack:completed>=5,progressPct:completed*10,timeline:[{at:start.toISOString(),actual:0,expected:0},{at:new Date().toISOString(),actual:completed,expected:5}],cabinets:[{id:deviceId+'-cabinet',deviceId,number:1,startedAt:new Date(Date.now()-120000).toISOString(),finishedAt:null,durationMs:120000,status:'building',lastReportedAt:new Date().toISOString(),stale:false,operatorId:operator.id,operatorName:operator.name,completedById:null,completedByName:null}]});
 const stations=['station-a','station-b'].map((id,i)=>({id,areaId:'department',name:i?'Station B':'Station A',target:10,product:'Cabinet',job:'Job',minIntervalMs:500,timerOnly:true,count:null,expected:5,median:null,p90:null,status:'online',devices:1,people:i?[]:[{id:operator.id,name:operator.name}],cabinet:build('device-'+i,i?3:9),timers:[] as any[]}));
 const roster=[operator,other];
 function dashboard(){
@@ -40,20 +40,20 @@ try{
  await expect(page.getByRole('heading',{name:'Assembly cabinet progress'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Workstation pace',level:2})).toBeVisible();
  await expect(page.locator('.cabinet-metrics>div:first-child strong')).toContainText('12');
- await expect(page.locator('.active-cabinet-card')).toHaveCount(2);
- await expect(page.locator('.active-cabinet-card').first()).toContainText('CABINET #2');
- await expect(page.locator('.active-cabinet-time strong').first()).toContainText(/\d+:\d{2}:\d{2}/);
+ await expect(page.locator('.build-station-card')).toHaveCount(2);
+ await expect(page.locator('.build-station-card').first()).toContainText('Station A');
+ await expect(page.locator('.build-station-current-time strong').first()).toContainText(/\d+:\d{2}:\d{2}/);
  await page.screenshot({path:'.local/department-shared-desktop.png',fullPage:true});
  const cabinet=stations[1].cabinet.cabinets[0];cabinet.status='completed';cabinet.finishedAt=new Date().toISOString();cabinet.completedById=operator.id;cabinet.completedByName=operator.name;
  stations[1].cabinet.completed++;stations[1].cabinet.active=false;
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
- await expect(page.locator('.active-cabinet-card.complete')).toBeVisible();
+ await expect(page.locator('.build-station-card.just-completed')).toBeVisible();
  await page.screenshot({path:'.local/department-completion.png',fullPage:true});
- await expect(page.locator('.active-cabinet-card.complete')).toHaveCount(0,{timeout:3000});
- await expect(page.locator('.active-cabinet-card')).toHaveCount(1);
+ await expect(page.locator('.build-station-card.just-completed')).toHaveCount(0,{timeout:4000});
+ await expect(page.locator('.build-station-card')).toHaveCount(2);
  await page.setViewportSize({width:390,height:844});
  await page.screenshot({path:'.local/department-shared-mobile.png',fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(errors).toEqual([]);
- console.log('Department browser smoke passed: separate live cabinet cards and timers, station pace, completion exit, and mobile layout.');
+ console.log('Department browser smoke passed: persistent build station cards and timers, station speed, completion confirmation, and mobile layout.');
 }finally{await browser.close();}

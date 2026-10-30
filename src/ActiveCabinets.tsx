@@ -1,5 +1,6 @@
 import {ArrowUpRight,CheckCircle2,HardHat,Pause,WifiOff} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
+import type {ReactNode} from 'react';
 import {visibleBuildMs} from './live-build-time';
 
 export type FloorCabinet={
@@ -13,7 +14,7 @@ const clock=(ms:number)=>{
  return `${Math.floor(seconds/3600)}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
 };
 
-export function ActiveCabinets({cabinets,nowMs,department,onStation}:{cabinets:FloorCabinet[];nowMs:number;department:boolean;onStation?:(id:string)=>void}){
+export function ActiveCabinets({cabinets,nowMs,department,onStation,actions}:{cabinets:FloorCabinet[];nowMs:number;department:boolean;onStation?:(id:string)=>void;actions?:ReactNode}){
  const previous=useRef<Map<string,FloorCabinet>|null>(null);
  const [leaving,setLeaving]=useState<FloorCabinet[]>([]);
  useEffect(()=>{
@@ -35,7 +36,7 @@ export function ActiveCabinets({cabinets,nowMs,department,onStation}:{cabinets:F
  if(!visible.length)return null;
  const building=onFloor.filter(c=>c.status==='building'&&!c.stale).length;
  return <section className="active-cabinets" aria-label="Cabinets on the floor">
-  <div className="active-cabinets-heading"><div><span className="build-kicker">ON THE FLOOR</span><h3>{onFloor.length} cabinet{onFloor.length===1?'':'s'} in progress</h3></div><span>{building} building{onFloor.length>building?` · ${onFloor.length-building} paused or last reported`:''}</span></div>
+  <div className="active-cabinets-heading"><div><span className="build-kicker">ON THE FLOOR</span><h3>{onFloor.length} cabinet{onFloor.length===1?'':'s'} in progress</h3></div><div className="section-heading-actions"><span>{building} building{onFloor.length>building?` · ${onFloor.length-building} paused or last reported`:''}</span>{actions}</div></div>
   <div className="active-cabinets-list">{visible.map(c=>{
    const completed=c.status==='completed',paused=c.status==='paused',stale=c.stale&&!completed;
    const state=completed?'complete':stale?'stale':paused?'paused':'building';
