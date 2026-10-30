@@ -113,7 +113,14 @@ app.get('/api/devices/:id/commands',role('supervisor'),asyncRoute(async(req,res)
 app.get('/api/devices/:id/commands/:commandId',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);await expireCommands(db,req.params.id);const command=await db.deviceCommand.findFirst({where:{id:req.params.commandId,deviceId:req.params.id}});if(!command)throw new HttpError(404,'Command not found');res.json(command);}));
 app.get('/api/devices/:id/events',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);const cursor=z.string().regex(/^\d+$/).optional().parse(req.query.cursor);res.json(await db.rawEvent.findMany({where:{deviceId:req.params.id,orgId:req.auth!.orgId,...(cursor?{id:{lt:BigInt(cursor)}}:{})},orderBy:{id:'desc'},take:50}));}));
 app.get('/api/devices/:id/assignments',role('supervisor'),asyncRoute(async(req,res)=>{await owned('device',req.params.id,req.auth!.orgId);res.json(await db.assignment.findMany({where:{deviceId:req.params.id},orderBy:{startedAt:'desc'},take:100}));}));
-app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),target:z.number().int().min(0).max(10000000).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
+app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({name:z.string().min(1).max(100).optional(),product:z.string().max(100).optional(),job:z.string().max(100).optional(),minIntervalMs:z.number().int().min(0).max(3600000).optional()}).strict().parse(req.body);res.json(await db.workstation.update({where:{id:req.params.id},data}));updates.emit(req.auth!.orgId);}));
+app.patch('/api/departments/:id/target',role('supervisor'),asyncRoute(async(req,res)=>{await owned('area',req.params.id,req.auth!.orgId);const {dailyTarget}=z.object({dailyTarget:z.number().int().min(0).max(100000000)}).strict().parse(req.body);const area=await db.area.update({where:{id:req.params.id},data:{dailyTarget}});updates.emit(req.auth!.orgId);res.json(area);}));
+app.patch('/api/departments/:id',role('admin'),asyncRoute(async(req,res)=>{
+  await owned('area',req.params.id,req.auth!.orgId);
+  const data=z.object({name:z.string().trim().min(1).max(100),dailyTarget:z.number().int().min(0).max(100000000),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color')}).strict().parse(req.body);
+  const area=await db.area.update({where:{id:req.params.id},data});
+  updates.emit(req.auth!.orgId);res.json(area);
+}));
 app.get('/api/workstations/:id/people',role('supervisor'),asyncRoute(async(req,res)=>{
   const station=await owned('workstation',req.params.id,req.auth!.orgId);
   const people=await db.user.findMany({where:{orgId:req.auth!.orgId,areaId:station.areaId},select:{id:true,name:true,workstationId:true},orderBy:{name:'asc'}});
@@ -160,15 +167,17 @@ app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{
- const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional()}).strict().parse(req.body);
+ const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional()}).strict().parse(req.body);
  const orgId=req.auth!.orgId;
  if(data.kind==='area'){
   const shop=await db.shop.upsert({where:{orgId},create:{orgId,name:'Quality Craft Wood Works'},update:{name:'Quality Craft Wood Works'}});
-  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id}}));
+  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,themeColor:data.themeColor??'#287f83'}}));
  }else{
   if(!data.parentId)throw new HttpError(400,'Choose a department');
   await owned('area',data.parentId,orgId);
-  res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId}}));
+  if(data.dailyTarget!==undefined)throw new HttpError(400,'Set the goal on the department');
+  if(data.themeColor!==undefined)throw new HttpError(400,'Set the theme color on the department');
+  res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId,target:0}}));
  }
  updates.emit(orgId);
 }));

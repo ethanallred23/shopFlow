@@ -2,6 +2,7 @@ import {DateTime} from 'luxon';
 import {db} from './db';
 import {shiftWindow} from './domain';
 import {cabinetProgress} from './cabinet-progress';
+import {shiftTarget,splitTarget} from './department-target';
 
 type Context={deviceId:string;orgId:string;workstationId:string|null};
 type Report=(fields:Record<string,unknown>)=>void;
@@ -21,8 +22,15 @@ async function calculate(context:Context,report:Report){
   if(!shift)return 0;
   const date=shift.endMinute<=shift.startMinute&&localNow.hour*60+localNow.minute<shift.endMinute?localNow.minus({days:1}).toISODate()!:localNow.toISODate()!;
   const window=shiftWindow(date,org.timezone,shift);
+  const [area,siblings]=await Promise.all([
+    db.area.findUniqueOrThrow({where:{id:station.areaId},select:{dailyTarget:true}}),
+    db.workstation.findMany({where:{areaId:station.areaId},select:{id:true}})
+  ]);
+  const weights=shifts.map(s=>({id:s.id,workingMs:shiftWindow(date,org.timezone,s).workingMs}));
+  const goal=shiftTarget(area.dailyTarget,weights,shift.id);
+  const target=splitTarget(goal,siblings.map(s=>s.id)).get(station.id)??0;
   const queryStarted=performance.now();
-  const progress=await cabinetProgress([context.deviceId],station.id,window.start,window.end,station.target,window.workingMs,window.elapsedMs,false);
+  const progress=await cabinetProgress([context.deviceId],station.id,window.start,window.end,target,window.workingMs,window.elapsedMs,false);
   report({stage:'pace_history',ms:Math.round(performance.now()-queryStarted),cabinets:progress.cabinets.length});
   return progress.requiredMsPerCabinet;
 }

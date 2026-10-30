@@ -6,6 +6,7 @@ import {detectionDashboard} from './detection-dashboard';
 import {cabinetProgress} from './cabinet-progress';
 import {Prisma} from '@prisma/client';
 import {departmentProgress} from './department-progress';
+import {shiftTarget,splitTarget} from './department-target';
 export async function dashboard(orgId:string,query:Record<string,any>){
   const org=await db.organization.findUniqueOrThrow({where:{id:orgId}});
   const [shops,areas,stations,shifts,devices,people]=await Promise.all([db.shop.findMany({where:{orgId}}),db.area.findMany({where:{orgId}}),db.workstation.findMany({where:{orgId}}),db.shift.findMany({where:{orgId}}),db.device.findMany({where:{orgId,archived:false}}),db.user.findMany({where:{orgId,workstationId:{not:null}},select:{id:true,name:true,workstationId:true}})]);
@@ -15,6 +16,12 @@ export async function dashboard(orgId:string,query:Record<string,any>){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!DateTime.fromISO(date).isValid)throw new HttpError(400,'Invalid date');
   const daily=query.period==='day'?dailySchedule(date,org.timezone,shifts):null;
   const window=daily?daily:shift?shiftWindow(date,org.timezone,shift):{start:DateTime.fromISO(date,{zone:org.timezone}).toJSDate(),end:DateTime.fromISO(date,{zone:org.timezone}).plus({days:1}).toJSDate(),workingMs:0,elapsedMs:0};
+  const shiftWeights=shifts.map(s=>({id:s.id,workingMs:shiftWindow(date,org.timezone,s).workingMs}));
+  const stationTargets=new Map<string,number>();
+  for(const area of areas){
+    const goal=daily||!shift?area.dailyTarget:shiftTarget(area.dailyTarget,shiftWeights,shift.id);
+    for(const [id,value] of splitTarget(goal,stations.filter(s=>s.areaId===area.id).map(s=>s.id)))stationTargets.set(id,value);
+  }
   const filtered=stations.filter(s=>(!query.area||s.areaId===query.area)&&(!query.shop||areas.find(a=>a.id===s.areaId)?.shopId===query.shop)&&(!query.workstation||s.id===query.workstation));
   const ids=filtered.map(s=>s.id);
   const timerHistory=await db.rawEvent.groupBy({by:['workstationId'],where:{orgId,workstationId:{in:ids},type:'sensor.detection_time_snapshot'}});
@@ -40,7 +47,7 @@ export async function dashboard(orgId:string,query:Record<string,any>){
     const count=group?group._sum.count??0:null;
     const timers=await detectionDashboard(orgId,ds.filter(d=>(d.capabilities as string[]).includes('detection_time')).map(d=>d.id),s.id,window.start,window.end);
     const timerOnly=(timers.length>0||timerHistory.some(h=>h.workstationId===s.id))&&ds.every(d=>(d.capabilities as string[]).includes('detection_time'));
-    const targetValue=daily?Math.round(s.target*daily.targetFactor):s.target;
+    const targetValue=stationTargets.get(s.id)??0;
     const expectedValue=window.workingMs?Math.floor(targetValue*window.elapsedMs/window.workingMs):0;
     const cabinet=timerOnly?await cabinetProgress(null,s.id,window.start,window.end,targetValue,window.workingMs,window.elapsedMs):null;
     return {...s,people:people.filter(p=>p.workstationId===s.id).map(({id,name})=>({id,name})),timerOnly,timers:timers.map(t=>({...t,connection:deviceStatus(ds.find(d=>d.id===t.deviceId)!),cabinet})),target:targetValue,count,expected:timerOnly?cabinet?.expected??0:expectedValue,cabinet,median:percentile(durations,.5),p90:percentile(durations,.9),status:ds.some(d=>deviceStatus(d)==='online')?'online':ds.length?'data unavailable':'no device',devices:ds.length};

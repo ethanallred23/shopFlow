@@ -11,8 +11,8 @@ async function seed(){
  const org=await db.organization.create({data:{name:'Northline · Demo',demo:true}});
  await db.user.create({data:{orgId:org.id,email,name:'Shop administrator',passwordHash:await bcrypt.hash(password,12),role:'admin'}});
  const shop=await db.shop.create({data:{orgId:org.id,name:'Northline demonstration shop'}});
- const assembly=await db.area.create({data:{orgId:org.id,shopId:shop.id,name:'Assembly'}});
- const finishing=await db.area.create({data:{orgId:org.id,shopId:shop.id,name:'Finishing'}});
+ const assembly=await db.area.create({data:{orgId:org.id,shopId:shop.id,name:'Assembly',dailyTarget:640}});
+ const finishing=await db.area.create({data:{orgId:org.id,shopId:shop.id,name:'Finishing',dailyTarget:400}});
  await db.shift.create({data:{orgId:org.id,name:'Day shift',startMinute:360,endMinute:840,breaks:[{start:120,end:135},{start:240,end:270}]}});
  await db.shift.create({data:{orgId:org.id,name:'Evening shift',startMinute:840,endMinute:1320,breaks:[{start:180,end:210}]}});
  await db.shift.create({data:{orgId:org.id,name:'Night shift',startMinute:1320,endMinute:360,breaks:[{start:180,end:210}]}});

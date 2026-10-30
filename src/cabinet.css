@@ -90,6 +90,20 @@
 .cabinet-progress:fullscreen .cabinet-history th,.cabinet-progress:fullscreen .cabinet-history td{padding:13px 12px}
 @media(max-width:600px){.station-pace-board{padding:15px}.station-pace-list{grid-template-columns:1fr}.cabinet-progress:fullscreen .cabinet-progress-track{height:18px}.cabinet-progress:fullscreen .cabinet-target-marker{height:32px;top:-7px}}
 .station-pace-counts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.station-pace-counts strong{padding:6px 10px;border-radius:8px;font-size:12px;white-space:nowrap}.station-pace-counts .behind{background:#fbe8e4;color:#aa4d3d}.station-pace-counts .ahead{background:#e3f5ed;color:#247d67}
+
+/* The department color owns the surface; pace colors stay readable signals. */
+.cabinet-progress.department-theme{--glow:color-mix(in srgb,var(--department-color) 28%,white);--soft:color-mix(in srgb,var(--department-color) 11%,white);--edge:color-mix(in srgb,var(--department-color) 32%,white);--ink:#233b43;--pace:#16865e}
+.cabinet-progress.department-theme.mood-behind{--pace:#c74255}
+.cabinet-progress.department-theme .cabinet-progress-track>span{background:linear-gradient(90deg,var(--pace),color-mix(in srgb,var(--pace) 68%,white))}
+.cabinet-progress.department-theme .cabinet-heading h2,.cabinet-progress.department-theme .cabinet-heading h2 svg{color:color-mix(in srgb,var(--department-color) 75%,#172f38)}
+.cabinet-progress.department-theme .cabinet-metrics>div:first-child{border-color:#91d8af;background:linear-gradient(145deg,#f2fbf5,#fff)}
+.cabinet-progress.department-theme .cabinet-metrics>div:first-child strong{color:#16865e}
+.cabinet-progress.department-theme .cabinet-target-marker{background:color-mix(in srgb,var(--department-color) 70%,#172f38)}
+.cabinet-progress.department-theme .cabinet-chart-legend .actual{background:var(--pace)}
+.cabinet-progress.department-theme .station-pace-row.behind{border-left-color:#c74255;background:#fff6f7}
+.cabinet-progress.department-theme .station-pace-row.ahead,.cabinet-progress.department-theme .station-pace-row.on-time{border-left-color:#16865e}
+.pace-status.ahead,.pace-status.on-time,.station-pace-counts .ahead{background:#e7f7ee;color:#176744}
+.pace-status.behind,.station-pace-counts .behind{background:#fcecef;color:#a62f43}
 .cabinet-progress:fullscreen .station-pace-list{max-height:clamp(160px,25vh,300px);overflow:auto;padding:2px}
 .station-pace-row{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
 .station-pace-row:hover{transform:translateY(-2px);box-shadow:0 8px 20px #173b4420;border-color:#8ccbbd}
