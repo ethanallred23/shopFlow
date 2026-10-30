@@ -5,11 +5,6 @@ import {hash,ingest,newToken} from './ingestion';
 import {cabinetSimulationFrame,type SimulationTiming} from './cabinet-simulation-frame';
 
 const marker='LOCAL-CABINET-SIMULATION';
-const profiles=[
- {name:'Demo assembly 01',operator:'Alex (simulated)',buildMs:24000,pauseMs:6000,idleMs:5000,offset:3000},
- {name:'Demo assembly 02',operator:'Sam (simulated)',buildMs:36000,pauseMs:8000,idleMs:6000,offset:19000},
- {name:'Demo assembly 03',operator:'Jordan (simulated)',buildMs:50000,pauseMs:10000,idleMs:5000,offset:29000},
-];
 type DeviceSimulation={deviceId:string;token:string;bootId:string;bootAt:number;liveAt:number;offset:number;
  sequence:number;lastStatus:string;lastSampleAt:number;timing:SimulationTiming};
 
@@ -23,6 +18,13 @@ export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
  const shop=await db.shop.findFirstOrThrow({where:{orgId}});
  let area=await db.area.findFirst({where:{orgId,name:'Cabinet simulation'}});
  if(!area)area=await db.area.create({data:{orgId,shopId:shop.id,name:'Cabinet simulation',themeColor:'#287f83',themeMode:'dark',cabinetPaceMs:60000}});
+ const paceMs=area.cabinetPaceMs??60000;
+ const profiles=[
+  {name:'Demo assembly 01',operator:'Alex (simulated)',buildMs:24000,pauseMs:6000,idleMs:5000,offset:3000},
+  {name:'Demo assembly 02',operator:'Sam (simulated)',buildMs:36000,pauseMs:8000,idleMs:6000,offset:19000},
+  {name:'Demo assembly 03',operator:'Jordan (simulated)',buildMs:50000,pauseMs:10000,idleMs:5000,offset:29000},
+  {name:'Demo assembly 04',operator:'Taylor (simulated)',buildMs:Math.round(paceMs*1.5),pauseMs:8000,idleMs:6000,offset:Math.round(paceMs*.3)},
+ ];
  const simulations:DeviceSimulation[]=[];
  for(const [index,profile] of profiles.entries()){
   let station=await db.workstation.findFirst({where:{orgId,areaId:area.id,job:marker,name:profile.name}});
@@ -43,13 +45,14 @@ export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
   await db.credential.updateMany({where:{deviceId:device.id,revokedAt:null},data:{revokedAt:new Date()}});
   const token=newToken();
   await db.credential.create({data:{deviceId:device.id,tokenHash:hash(token)}});
-  const now=Date.now();
-  const simulation:DeviceSimulation={deviceId:device.id,token,bootId:randomUUID(),bootAt:now-1800000,liveAt:now,
+  const now=Date.now(),historyIntervalMs=Math.max(300000,profile.buildMs+profile.pauseMs+profile.idleMs);
+  const bootAt=now-Math.max(1800000,120000+2*historyIntervalMs+profile.buildMs+60000);
+  const simulation:DeviceSimulation={deviceId:device.id,token,bootId:randomUUID(),bootAt,liveAt:now,
    offset:profile.offset,sequence:0,lastStatus:'',lastSampleAt:0,timing:profile};
   // Initial history makes the graph and cabinet log useful on the first visit.
   if(!await db.rawEvent.count({where:{deviceId:device.id}})){
    for(let cabinet=0;cabinet<3;cabinet++){
-    const started=120000+cabinet*300000,duration=profile.buildMs;
+    const started=120000+cabinet*historyIntervalMs,duration=profile.buildMs;
     for(const completed of [false,true]){
      const uptime=started+(completed?duration:0);
      const result=await ingest(token,{schemaVersion:1,eventId:randomUUID(),deviceId:device.id,bootId:simulation.bootId,sequence:simulation.sequence++,uptimeMs:uptime,
@@ -89,6 +92,6 @@ export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
  const interval=setInterval(()=>void tick().catch(()=>console.error('Local cabinet simulation could not update. Check the local database connection.')),1000);
  const address=new URL(process.env.APP_ORIGIN??'http://127.0.0.1:5173');address.searchParams.set('department',area.id);
  console.log(`Local cabinet simulation: ${address.href}`);
- console.log('Three simulated workstations are building, pausing, and completing cabinets. Set LOCAL_CABINET_SIMULATION=0 and restart to stop.');
+ console.log('Four simulated workstations are building, pausing, and completing cabinets, including Taylor at 50% over the desired build time. Set LOCAL_CABINET_SIMULATION=0 and restart to stop.');
  return ()=>{stopped=true;clearInterval(interval);};
 }

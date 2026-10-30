@@ -45,12 +45,12 @@ try{
  await expect(second.locator('.build-station-speed')).toContainText('10m 30s');
  await expect(third).toHaveClass(/ready.*speed-unknown/);
  await expect(third).toContainText('Ready for next cabinet');
- expect(await first.evaluate(element=>getComputedStyle(element).animationName)).toContain('station-green-flow');
- expect(await second.evaluate(element=>getComputedStyle(element).animationName)).toBe('none');
+ expect(await first.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationName)).toContain('station-health-flow');
+ expect(await second.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationPlayState)).toBe('paused');
  await page.locator('.build-stations').screenshot({path:'.local/build-stations-dark.png'});
  phase='paused';await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(first).toHaveClass(/paused/);
- expect(await first.evaluate(element=>getComputedStyle(element).animationName)).toBe('none');
+ expect(await first.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationPlayState)).toBe('paused');
  phase='completed';await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(first.locator('.build-station-completion')).toBeVisible();
  await expect(cards).toHaveCount(3);
@@ -59,12 +59,12 @@ try{
  phase='offline';await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(first).toHaveClass(/offline/);
  await expect(first).toContainText('Device offline');
- expect(await first.evaluate(element=>getComputedStyle(element).animationName)).toBe('none');
+ expect(await first.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationPlayState)).toBe('paused');
  phase='building';themeMode='light';await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(page.locator('.department-view')).toHaveClass(/theme-light/);
  await page.locator('.build-stations').screenshot({path:'.local/build-stations-light.png'});
  await page.emulateMedia({reducedMotion:'reduce'});
- expect(await first.evaluate(element=>getComputedStyle(element).animationName)).toBe('none');
+ expect(await first.locator('.build-station-surface').evaluate(element=>getComputedStyle(element).animationName)).toBe('none');
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.getByRole('button',{name:'Hide Build stations',exact:true}).click();
  await expect(page.locator('.build-stations')).toHaveCount(0);
@@ -75,5 +75,5 @@ try{
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.locator('.build-stations').screenshot({path:'.local/build-stations-mobile.png'});
  expect(errors).toEqual([]);
- console.log('Build stations passed: average speed health, persistent idle stations, green build animation, paused/offline states, completion confirmation, reduced motion, light/dark themes, hide/restore, and mobile layout.');
+ console.log('Build stations passed: average speed health, persistent idle stations, health-colored build animation, paused/offline states, completion confirmation, reduced motion, light/dark themes, hide/restore, and mobile layout.');
 }finally{await browser.close();}

@@ -6,6 +6,7 @@ import {visibleBuildMs} from './live-build-time';
 export type FloorCabinet={
  id:string;number:number;status:string;stale:boolean;durationMs:number;lastReportedAt:string;
  stationId?:string;stationName?:string;operatorName?:string|null;
+ startedAt?:string|null;
 };
 
 const active=(cabinet:FloorCabinet)=>cabinet.status==='building'||cabinet.status==='paused';

@@ -31,14 +31,12 @@
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading .build-kicker{display:none}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-heading p{display:none}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-stations-grid{gap:10px}
-.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-card{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);grid-template-areas:'title title' 'operator health' 'speed current' 'track track' 'caption count';gap:6px 10px;padding:10px;border-radius:11px;align-content:start}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-card{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);grid-template-areas:'title title' 'health health' 'speed current' 'track track' 'caption count';gap:6px 10px;padding:10px;border-radius:11px;align-content:start}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-top{grid-area:title;min-width:0}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-number{font-size:8px;letter-spacing:.08em}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-top h4{font-size:16px;margin-top:3px;line-height:1.2}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-open{width:27px;height:27px}
-.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-operator{grid-area:operator;margin:0;font-size:10px;gap:4px;align-self:center}
-.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-operator svg{width:12px;height:12px}
-.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-health{grid-area:health;justify-self:end;align-self:center;font-size:9px;line-height:1.3;padding:4px 5px;gap:4px}
+.department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-health{grid-area:health;margin:0;justify-self:start;align-self:center;font-size:9px;line-height:1.3;padding:4px 5px;gap:4px}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-health svg{width:12px;height:12px}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed{grid-area:speed;flex-direction:column;margin:4px 0 0;align-items:start;gap:5px;min-width:0}
 .department-view .build-stations:is([data-density="fit"],[data-density="compact"]) .build-station-speed>div>span{font-size:7px;letter-spacing:.03em;line-height:1.3}

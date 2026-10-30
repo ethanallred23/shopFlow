@@ -9,17 +9,14 @@
 .build-station-card>*{position:relative;z-index:1}
 .build-station-card.speed-good{--speed-color:#178357}
 .build-station-card.speed-slow{--speed-color:#c52d22}
-.build-station-card.building{background:linear-gradient(115deg,#eefbf4 0%,#c3edda 30%,#f3fff6 58%,#caefdf 100%);background-size:220% 220%;animation:station-green-flow 7s ease-in-out infinite;box-shadow:0 6px 24px #16846920}
-.build-station-card.building::before{content:'';position:absolute;inset:0 auto 0 -45%;width:45%;background:linear-gradient(90deg,transparent,#ffffff99,transparent);transform:skewX(-18deg);animation:station-light-sweep 4.5s ease-in-out infinite;pointer-events:none;z-index:0}
+.build-station-card>.build-station-surface{background:linear-gradient(115deg,#eefbf4 0%,#c3edda 30%,#f3fff6 58%,#caefdf 100%);background-size:220% 220%;animation:station-health-flow 7s ease-in-out infinite;box-shadow:0 6px 24px #16846920}
+.build-station-card>.build-station-surface::after{content:'';position:absolute;inset:0 auto 0 -45%;width:45%;background:linear-gradient(90deg,transparent,#ffffff99,transparent);transform:skewX(-18deg);animation:station-light-sweep 4.5s ease-in-out infinite;pointer-events:none;z-index:0}
 .build-station-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .build-station-number{display:block;font-size:10px;font-weight:800;letter-spacing:.13em;color:#41675e}
 .build-station-top h4{font:800 20px/1.25 Manrope,sans-serif;letter-spacing:-.5px;margin:5px 0 0;overflow-wrap:anywhere}
 .build-station-open{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:1px solid #a8c9bc;border-radius:8px;background:#ffffffc4;color:#255a47}
 .build-station-open:hover{background:#fff;border-color:#4b9c7b}
-.build-station-operator{display:flex;align-items:center;gap:7px;min-width:0;margin:14px 0;color:#35594f;font-size:12px;font-weight:600}
-.build-station-operator span{overflow-wrap:anywhere}
-.build-station-operator svg{flex:none}
-.build-station-health{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;padding:6px 9px;border-radius:7px;background:#e9eff0;color:#50656d;font-size:11px;font-weight:750}
+.build-station-health{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin-top:12px;padding:6px 9px;border-radius:7px;background:#e9eff0;color:#50656d;font-size:11px;font-weight:750}
 .build-station-health.good{background:#ddf4e6;color:#17623d}
 .build-station-health.slow{background:#fbe1da;color:#a9231b}
 .build-station-health svg{flex:none}
@@ -55,9 +52,9 @@
 .department-view.theme-dark .build-station-card{--speed-color:#a9bdc2;background:#20333c;border-color:#4c646b;border-top-color:var(--speed-color);color:#f1f8f5}
 .department-view.theme-dark .build-station-card.speed-good{--speed-color:#8fe0ae}
 .department-view.theme-dark .build-station-card.speed-slow{--speed-color:#ff695a}
-.department-view.theme-dark .build-station-card.building{background:linear-gradient(115deg,#18382f 0%,#24513c 32%,#1b3834 58%,#285a40 100%);background-size:220% 220%;box-shadow:0 6px 25px #0a201740}
-.department-view.theme-dark .build-station-card.building::before{background:linear-gradient(90deg,transparent,#9cf5b922,transparent)}
-.department-view.theme-dark .build-station-number,.department-view.theme-dark .build-station-operator,.department-view.theme-dark .build-station-speed>div>span,.department-view.theme-dark .build-station-current-time>span,.department-view.theme-dark .build-station-desired small,.department-view.theme-dark .build-station-state small,.department-view.theme-dark .build-station-footer>span,.department-view.theme-dark .build-station-speed-caption{color:#c6ded4}
+.department-view.theme-dark .build-station-card>.build-station-surface{background:linear-gradient(115deg,#18382f 0%,#24513c 32%,#1b3834 58%,#285a40 100%);background-size:220% 220%;box-shadow:0 6px 25px #0a201740}
+.department-view.theme-dark .build-station-card>.build-station-surface::after{background:linear-gradient(90deg,transparent,#9cf5b922,transparent)}
+.department-view.theme-dark .build-station-number,.department-view.theme-dark .build-station-speed>div>span,.department-view.theme-dark .build-station-current-time>span,.department-view.theme-dark .build-station-desired small,.department-view.theme-dark .build-station-state small,.department-view.theme-dark .build-station-footer>span,.department-view.theme-dark .build-station-speed-caption{color:#c6ded4}
 .department-view.theme-dark .build-station-speed .build-station-desired strong{color:#edf8f1}
 .department-view.theme-dark .build-station-health{background:#354b54;color:#d1e0e3}
 .department-view.theme-dark .build-station-health.good{background:#234e35;color:#bcf1cc}
@@ -70,8 +67,44 @@
 .department-view.theme-dark .build-station-open{background:#203f35;border-color:#59816a;color:#d3efdf}
 .department-view.theme-dark .build-station-completion{background:#25583d;border-color:#76c494;color:#e5ffee}
 .cabinet-progress:fullscreen .build-stations-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}
-@keyframes station-green-flow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes station-health-flow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 @keyframes station-light-sweep{0%,15%{left:-45%;opacity:0}25%{opacity:.8}65%,100%{left:115%;opacity:0}}
 @keyframes station-finish-notice{0%{opacity:0;transform:translateY(10px)}15%,75%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-8px)}}
 @media(max-width:700px){.build-stations{padding:13px}.build-stations-heading{flex-direction:column;gap:10px}.build-stations-heading .section-heading-actions{align-self:stretch;justify-content:space-between}.build-station-card{padding:16px}.build-station-speed>div>strong{font-size:28px}.build-station-current-time strong{font-size:25px}}
-@media(prefers-reduced-motion:reduce){.build-station-card.building,.build-station-card.building::before,.build-station-completion{animation:none}.build-station-speed-track>span{transition:none}}
+@media(prefers-reduced-motion:reduce){.build-station-card.building,.build-station-card>.build-station-surface::after,.build-station-completion{animation:none}.build-station-speed-track>span{transition:none}}
+
+/* Health tints the entire station, independently of whether its timer is running. */
+@property --health-hue{syntax:'<number>';inherits:true;initial-value:120}
+.build-station-card{transition:--health-hue 1.2s ease,border-color 1.2s ease}
+.department-view .build-station-card.health-tinted{--speed-color:hsl(var(--health-hue) 72% 31%);--health-muted:hsl(var(--health-hue) 22% 29%);--health-line:hsl(var(--health-hue) 25% 72%);--health-badge:hsl(var(--health-hue) 63% 90%);--health-ink:hsl(var(--health-hue) 62% 24%);background:linear-gradient(120deg,hsl(var(--health-hue) 45% 96%),hsl(var(--health-hue) 50% 93%));border-color:var(--health-line);border-top-color:var(--speed-color)}
+.department-view .build-station-card.health-tinted>.build-station-surface{background:linear-gradient(115deg,hsl(var(--health-hue) 65% 95%) 0%,hsl(var(--health-hue) 58% 82%) 32%,hsl(var(--health-hue) 67% 97%) 58%,hsl(var(--health-hue) 55% 86%) 100%);background-size:220% 220%;box-shadow:0 6px 24px hsl(var(--health-hue) 45% 24% / .12)}
+.department-view .build-station-card.health-tinted .build-station-health{background:var(--health-badge);color:var(--health-ink)}
+.department-view .build-station-card.health-tinted :is(.build-station-number,.build-station-speed>div>span,.build-station-current-time>span,.build-station-desired small,.build-station-state small,.build-station-footer>span,.build-station-speed-caption){color:var(--health-muted)}
+.department-view .build-station-card.health-tinted .build-station-speed-caption>span:first-child{color:var(--speed-color)}
+.department-view .build-station-card.health-tinted :is(.build-station-current,.build-station-footer){border-color:var(--health-line)}
+.department-view .build-station-card.health-tinted .build-station-speed-track{background:hsl(var(--health-hue) 20% 86%)}
+.department-view .build-station-card.health-tinted .build-station-state>svg{color:var(--speed-color)}
+.department-view .build-station-card.health-tinted .build-station-open{background:var(--health-badge);border-color:var(--health-line);color:var(--health-ink)}
+.department-view .build-station-card.health-tinted .build-station-open:hover{filter:brightness(1.06)}
+.department-view.theme-dark .build-station-card.health-tinted{--speed-color:hsl(var(--health-hue) 78% 68%);--health-muted:hsl(var(--health-hue) 24% 84%);--health-line:hsl(var(--health-hue) 22% 39%);--health-badge:hsl(var(--health-hue) 39% 24%);--health-ink:hsl(var(--health-hue) 75% 84%);background:linear-gradient(120deg,hsl(var(--health-hue) 24% 18%),hsl(var(--health-hue) 20% 15%));border-top-color:var(--speed-color)}
+.department-view.theme-dark .build-station-card.health-tinted>.build-station-surface{background:linear-gradient(115deg,hsl(var(--health-hue) 33% 17%) 0%,hsl(var(--health-hue) 40% 25%) 32%,hsl(var(--health-hue) 29% 18%) 58%,hsl(var(--health-hue) 39% 27%) 100%);background-size:220% 220%;box-shadow:0 6px 25px hsl(var(--health-hue) 40% 5% / .3)}
+.department-view.theme-dark .build-station-card.health-tinted>.build-station-surface::after{background:linear-gradient(90deg,transparent,hsl(var(--health-hue) 75% 78% / .14),transparent)}
+.department-view.theme-dark .build-station-card.health-tinted .build-station-speed-track{background:hsl(var(--health-hue) 19% 29%)}
+.department-view .build-station-card.speed-unknown>.build-station-surface{background:linear-gradient(115deg,#f0f4f5,#dfe8ea,#f7f9fa);background-size:220% 220%;box-shadow:0 6px 24px #20373e16}
+.department-view.theme-dark .build-station-card.speed-unknown>.build-station-surface{background:linear-gradient(115deg,#20333c,#2c424b,#1d3038);background-size:220% 220%;box-shadow:0 6px 24px #0002}
+.department-view.theme-dark .build-station-card.speed-unknown>.build-station-surface::after{background:linear-gradient(90deg,transparent,#ffffff16,transparent)}
+@media(prefers-reduced-motion:reduce){.build-station-card{transition:none}}
+
+/* Keep the moving surface mounted so starting, pausing, and resuming can crossfade. */
+.build-station-card>.build-station-surface{position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity 1.1s cubic-bezier(.22,.61,.36,1);animation-play-state:paused}
+.build-station-card>.build-station-surface::after{animation-play-state:paused}
+.build-station-card.building[data-motion-ready="true"]>.build-station-surface{opacity:1;animation-play-state:running}
+.build-station-card.building[data-motion-ready="true"]>.build-station-surface::after{animation-play-state:running}
+.build-station-card>.build-station-start-burst{position:absolute;inset:2px;z-index:2;border:2px solid var(--speed-color);border-radius:inherit;pointer-events:none;background:radial-gradient(ellipse at 50% 65%,color-mix(in srgb,var(--speed-color) 15%,transparent),transparent 72%);box-shadow:inset 0 0 24px color-mix(in srgb,var(--speed-color) 20%,transparent);animation:station-start-burst 1.25s cubic-bezier(.2,.8,.3,1) both}
+.build-station-card.just-started .build-station-state>svg{transform-origin:50% 80%;animation:station-start-icon .85s cubic-bezier(.2,1.3,.4,1) both}
+.build-station-card.just-started .build-station-current-time>strong{transform-origin:right center;animation:station-start-timer .9s cubic-bezier(.2,.9,.3,1) both}
+.build-station-card>.build-station-start-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@keyframes station-start-burst{0%{opacity:0;transform:scale(.96)}18%{opacity:1}65%{opacity:.4}100%{opacity:0;transform:scale(1.025)}}
+@keyframes station-start-icon{0%{opacity:.3;transform:translateY(3px) rotate(-12deg) scale(.75)}45%{opacity:1;transform:translateY(-2px) rotate(4deg) scale(1.18)}100%{opacity:1;transform:translateY(0) rotate(0) scale(1)}}
+@keyframes station-start-timer{0%{opacity:.25;transform:translateY(5px) scale(.96)}45%{opacity:1;transform:translateY(-1px) scale(1.035)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.build-station-card>.build-station-surface,.build-station-card>.build-station-surface::after,.build-station-card>.build-station-start-burst,.build-station-card.just-started .build-station-state>svg,.build-station-card.just-started .build-station-current-time>strong{animation:none;transition:none}.build-station-card>.build-station-start-burst{display:none}}
