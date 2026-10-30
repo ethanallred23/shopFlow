@@ -22,7 +22,7 @@ export function CompletionNotice({cabinets}:{cabinets:any[]}){
  return celebration&&<div className="cabinet-celebration" role="status" aria-live="polite"><div className="celebration-card"><span className="celebration-spark spark-one"/><span className="celebration-spark spark-two"/><span className="celebration-icon"><PackageCheck size={36}/></span><span className="build-kicker">ANOTHER ONE COMPLETE</span><strong>Cabinet #{celebration.number} finished!</strong><small>{celebration.stationName||'Nice work, team.'}</small><button onClick={()=>setCelebration(null)} aria-label="Dismiss completion">×</button></div></div>;
 }
 
-export function CabinetProgress({progress,compact=false,devMode=false,onSimulate,zone,department=false,title,stations=[],onStation}:{progress:any;zone?:string;compact?:boolean;devMode?:boolean;department?:boolean;title?:string;stations?:any[];onStation?:(id:string)=>void;onSimulate?:(completed:number)=>Promise<void>}){
+export function CabinetProgress({progress,compact=false,devMode=false,onSimulate,zone,department=false,themeMode='light',title,stations=[],onStation}:{progress:any;zone?:string;compact?:boolean;devMode?:boolean;department?:boolean;themeMode?:'light'|'dark';title?:string;stations?:any[];onStation?:(id:string)=>void;onSimulate?:(completed:number)=>Promise<void>}){
  const frame=useRef<HTMLElement>(null);
  const [fullscreen,setFullscreen]=useState(false);
  const [nowMs,setNowMs]=useState(()=>Date.now());
@@ -48,7 +48,7 @@ export function CabinetProgress({progress,compact=false,devMode=false,onSimulate
  const statusText=status==='ahead'?`${progress.completed-progress.expected} cabinet${progress.completed-progress.expected===1?'':'s'} ahead of pace`:status==='on-time'?'Exactly on pace':`${progress.expected-progress.completed} cabinet${progress.expected-progress.completed===1?'':'s'} behind pace`;
  const toggle=async()=>{if(document.fullscreenElement===frame.current)await document.exitFullscreen();else await frame.current?.requestFullscreen();};
  const openStation=async(id:string)=>{if(document.fullscreenElement){try{await document.exitFullscreen();}catch{}}onStation?.(id);};
- const color=status==='behind'?'#c74255':'#16865e';
+ const color=themeMode==='dark'?(status==='behind'?'#ff93a4':'#8fe0ae'):(status==='behind'?'#c74255':'#16865e');
  const headline=progress.target>0&&progress.remaining===0?'Goal reached. Great work!':status==='ahead'?'Great work. You are ahead.':status==='on-time'?'Right on time. Keep it going.':'Let’s build momentum.';
  const encouragement=status==='behind'?'Focus on the next cabinet. Every finish moves the team forward.':'Your steady effort is adding up. Keep the quality and the rhythm.';
  const timeline=(progress.timeline??[]).map((point:any)=>({...point,time:new Date(point.at).getTime()}));

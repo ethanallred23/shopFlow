@@ -37,6 +37,7 @@ model Area {
   name String
   dailyTarget Int @default(0)
   themeColor String @default("#287f83")
+  themeMode String @default("light")
   @@index([orgId, shopId])
   orgIdRef Organization @relation("Area_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   shopIdRef Shop @relation("Area_shopId", fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)

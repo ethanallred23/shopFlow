@@ -23,6 +23,38 @@
 .department-setting>div{flex:1;min-width:150px}
 .department-setting strong{display:block}
 input[type=color]{width:100%;height:48px;padding:4px;cursor:pointer}
+
+/* Department color is a surface accent; light mode keeps reading text dark. */
+.department-card,.department-card h2,.department-card>strong,.department-view.theme-light,.department-view.theme-light .department-intro h2,.department-view.theme-light .department-eyebrow,.department-view.theme-light .department-share{color:#17232a}
+.department-view.theme-light .department-intro p,.department-view.theme-light .panel p{color:#36474d}
+.department-view.theme-light .department-pulse>span{color:#17232a}
+.department-view.theme-light .department-pulse .needs-attention{color:#a62f43}
+.floor .department-view.theme-light .department-intro h2{color:#17232a}
+
+/* A department's dark mode covers its surrounding page and all shared panels. */
+.app.department-dark{background:#0c151c}
+.app.department-dark main,.app.department-dark .content{background:#0c151c;color:#eaf2f3}
+.app.department-dark .topbar{background:#101d25;border-color:#29414a;color:#d9e8e9}
+.app.department-dark .breadcrumb strong,.app.department-dark .page-heading h1,.app.department-dark .section-heading h2{color:#f2f7f7}
+.app.department-dark .page-heading p,.app.department-dark .breadcrumb,.app.department-dark .timezone,.app.department-dark footer{color:#b8c9ce}
+.app.department-dark .filters{background:#162730;border-color:#34505a;color:#eaf2f3}
+.app.department-dark .filters select,.app.department-dark .filters input{background:#20343d;border-color:#47616a;color:#f4f8f8}
+.app.department-dark .department-back{background:#20343d;border-color:#47616a;color:#f4f8f8}
+.app.department-dark .floor-footer,.app.department-dark .shop-label{color:#d9e8e9}
+.department-view.theme-dark{background:linear-gradient(180deg,color-mix(in srgb,var(--department-color) 24%,#0c151c),#0c151c 560px);color:#eaf2f3}
+.department-view.theme-dark .department-intro{background:linear-gradient(120deg,color-mix(in srgb,var(--department-color) 25%,#14232c),#172730);border-color:color-mix(in srgb,var(--department-color) 35%,#3b5059)}
+.department-view.theme-dark .department-intro h2,.department-view.theme-dark .department-eyebrow,.department-view.theme-dark .department-share{color:#f4f8f8}
+.department-view.theme-dark .department-intro p,.department-view.theme-dark .panel p{color:#c2d1d4}
+.department-view.theme-dark .department-pulse>span{background:#20343d;border-color:#46616a;color:#f2f7f7}
+.department-view.theme-dark .department-pulse .needs-attention{background:#42232e;border-color:#a74b61;color:#ffd4dc}
+.department-view.theme-dark .department-configure{background:#20343d;border-color:#557078;color:#f4f8f8}
+.department-view.theme-dark .panel,.floor .department-view.theme-dark .panel{background:#172730;border-color:#39515a;color:#f0f5f5}
+.department-view.theme-dark .panel h2,.department-view.theme-dark .panel h3,.department-view.theme-dark .panel td,.department-view.theme-dark .panel th{color:#f0f5f5}
+.department-view.theme-dark .panel th,.department-view.theme-dark .panel td{border-color:#38505a}
+.department-view.theme-dark .panel small,.department-view.theme-dark .panel .hint{color:#b5c8cc}
+.department-view.theme-dark .text-button{color:#a8e3d4}
+.department-view.theme-dark .operator-missing{color:#ff9aab}
+.department-view.theme-dark .pace-status.unknown{background:#2b414b;color:#d7e4e6}
 .station-people{border:1px solid #b7d9cc;background:#f5fbf8}.station-people.unassigned{border:2px solid #dc5344;background:#fff1ef;box-shadow:0 8px 24px #a82d2015}.station-people-header{display:flex;align-items:center;justify-content:space-between;gap:15px}.station-people-header svg{color:#b53325}.station-people-kicker{display:flex;align-items:center;gap:6px;color:#608477;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.station-people-header h2{margin:7px 0 0;font-size:18px}.station-people-warning{padding:15px 0 8px}.station-people-warning strong{display:block;color:#a62219;font-size:clamp(24px,3vw,38px);line-height:1.1}.station-people-warning p{color:#8d423b;font-size:13px}.station-people-controls{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:14px}.station-people-controls label{display:grid;gap:5px;color:#415e56;font-size:12px;font-weight:700}.station-people-controls select{min-width:220px}.station-people-controls small{flex-basis:100%;color:#627b73}.assigned-people{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.assigned-person{display:flex;align-items:center;gap:16px;padding:8px 10px;background:#fff;border:1px solid #cae5d9;border-radius:9px}.assigned-person span{display:flex;align-items:center;gap:8px;font-weight:700;color:#246650}.assigned-person button{padding:5px 8px;font-size:11px}.setting-row{gap:10px;flex-wrap:wrap}
 
 .ci-brand{display:inline-flex;align-items:center;gap:6px;margin-top:8px;color:#527d73;font-size:11px;line-height:1.5}.ci-brand strong{font-weight:700}

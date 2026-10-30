@@ -117,7 +117,7 @@ app.patch('/api/workstations/:id',role('supervisor'),asyncRoute(async(req,res)=>
 app.patch('/api/departments/:id/target',role('supervisor'),asyncRoute(async(req,res)=>{await owned('area',req.params.id,req.auth!.orgId);const {dailyTarget}=z.object({dailyTarget:z.number().int().min(0).max(100000000)}).strict().parse(req.body);const area=await db.area.update({where:{id:req.params.id},data:{dailyTarget}});updates.emit(req.auth!.orgId);res.json(area);}));
 app.patch('/api/departments/:id',role('admin'),asyncRoute(async(req,res)=>{
   await owned('area',req.params.id,req.auth!.orgId);
-  const data=z.object({name:z.string().trim().min(1).max(100),dailyTarget:z.number().int().min(0).max(100000000),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color')}).strict().parse(req.body);
+  const data=z.object({name:z.string().trim().min(1).max(100),dailyTarget:z.number().int().min(0).max(100000000),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color'),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
   const area=await db.area.update({where:{id:req.params.id},data});
   updates.emit(req.auth!.orgId);res.json(area);
 }));
@@ -167,16 +167,17 @@ app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{
- const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional()}).strict().parse(req.body);
+ const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
  const orgId=req.auth!.orgId;
  if(data.kind==='area'){
   const shop=await db.shop.upsert({where:{orgId},create:{orgId,name:'Quality Craft Wood Works'},update:{name:'Quality Craft Wood Works'}});
-  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,themeColor:data.themeColor??'#287f83'}}));
+  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,themeColor:data.themeColor??'#287f83',themeMode:data.themeMode??'light'}}));
  }else{
   if(!data.parentId)throw new HttpError(400,'Choose a department');
   await owned('area',data.parentId,orgId);
   if(data.dailyTarget!==undefined)throw new HttpError(400,'Set the goal on the department');
   if(data.themeColor!==undefined)throw new HttpError(400,'Set the theme color on the department');
+  if(data.themeMode!==undefined)throw new HttpError(400,'Set the theme mode on the department');
   res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId,target:0}}));
  }
  updates.emit(orgId);

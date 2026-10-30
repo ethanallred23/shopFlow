@@ -1,0 +1,1 @@
+ALTER TABLE `Area` ADD COLUMN `themeMode` VARCHAR(10) NOT NULL DEFAULT 'light';

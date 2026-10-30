@@ -120,3 +120,36 @@
 @keyframes build-gradient-flow{0%,100%{background-position:0% 45%}50%{background-position:100% 55%}}
 @keyframes build-light-sweep{0%,15%{left:-45%;opacity:0}25%{opacity:.8}65%,100%{left:115%;opacity:0}}
 @media(prefers-reduced-motion:reduce){.build-in-progress,.build-in-progress::before{animation:none}}
+
+/* Keep the chosen color in the background while text retains contrast. */
+.department-view.theme-light .cabinet-progress.department-theme{--ink:#17232a;color:#17232a}
+.department-view.theme-light .cabinet-progress.department-theme .cabinet-heading h2,.department-view.theme-light .cabinet-progress.department-theme .cabinet-heading h2 svg{color:#17232a}
+.department-view.theme-light .cabinet-progress.department-theme .cabinet-heading p,.department-view.theme-light .cabinet-progress.department-theme .cabinet-chart-heading p,.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics span,.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics small{color:#33464d}
+.department-view.theme-light .cabinet-progress.department-theme .cabinet-metrics>div:not(:first-child) strong{color:#17232a}
+.department-view.theme-dark .cabinet-progress.department-theme{--ink:#eef5f6;--edge:color-mix(in srgb,var(--department-color) 30%,#3c5660);--soft:color-mix(in srgb,var(--department-color) 18%,#12222c);--glow:color-mix(in srgb,var(--department-color) 30%,#14232c);--pace:#8fe0ae;background:radial-gradient(ellipse at 100% 0%,var(--glow),transparent 65%),linear-gradient(135deg,#101d25,var(--soft));color:#eef5f6}
+.department-view.theme-dark .cabinet-progress.department-theme.mood-behind{--pace:#ff93a4}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading h2,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading h2 svg{color:#f4f8f8}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-heading p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-chart-heading p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-chart-legend,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-graph-footer,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-history p,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-foot{color:#c2d1d4}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div{background:linear-gradient(145deg,#20333d,#192a34);border-color:var(--edge)}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div:first-child{background:linear-gradient(145deg,#183d35,#1a2e35);border-color:#42866b}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics strong,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics>div:first-child strong{color:#f4f8f8}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics span,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-metrics small{color:#c9d8d9}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-view-toggle{background:#1b2e38;border-color:#47616a}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-view-toggle button{color:#c5d6d9}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-view-toggle button.active,.department-view.theme-dark .cabinet-progress.department-theme .panel-fullscreen{background:#304650;border-color:#59717a;color:#f4f8f8}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-progress-track{background:#3b515b}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-target-marker b{color:#eaf2f3}
+.department-view.theme-dark .cabinet-progress.department-theme:fullscreen .cabinet-target-marker b{background:#253943;color:#f4f8f8}
+.department-view.theme-dark .cabinet-progress.department-theme:fullscreen .cabinet-foot{background:#223741}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-graph-status,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-plot,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-board{background:#192b35;border-color:var(--edge);color:#eaf2f3}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-chart-legend .expected{border-color:#cbdadd}
+.department-view.theme-dark .cabinet-progress.department-theme .station-pace-heading p,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-identity small,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-numbers span,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-numbers small{color:#c0d0d3}
+.department-view.theme-dark .cabinet-progress.department-theme .station-pace-row,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-row.behind{background:#20333d;border-color:#506671;color:#f0f5f5}
+.department-view.theme-dark .cabinet-progress.department-theme .station-pace-row.behind{border-left-color:#ff93a4}
+.department-view.theme-dark .cabinet-progress.department-theme .station-pace-row.ahead,.department-view.theme-dark .cabinet-progress.department-theme .station-pace-row.on-time{border-left-color:#8fe0ae}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-table-scroll,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-history thead th{background:#1b2d36}
+.department-view.theme-dark .cabinet-progress.department-theme .cabinet-history th,.department-view.theme-dark .cabinet-progress.department-theme .cabinet-history td{border-color:#425963;color:#eaf2f3}
+.department-view.theme-dark .cabinet-progress.department-theme .recharts-cartesian-axis-tick-value{fill:#d3e0e2!important}
+.department-view.theme-dark .cabinet-progress.department-theme .recharts-cartesian-grid line{stroke:#3f555e}
+.department-view.theme-dark .cabinet-progress.department-theme .build-in-progress{background:linear-gradient(115deg,#184639,#265f4c,#184639);border-color:#4c9973;color:#ecfff2}
+.department-view.theme-dark .cabinet-progress.department-theme .build-in-progress small,.department-view.theme-dark .cabinet-progress.department-theme .build-kicker{color:#c5f0d4}
