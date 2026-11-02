@@ -13,6 +13,23 @@ type BuildStation={id:string;name:string;status:string;devices:number;timerOnly?
  cabinet?:{desiredPaceMs?:number;averageBuildMs:number;completed:number;cabinets:FloorCabinet[]}|null};
 const active=(cabinet:FloorCabinet)=>cabinet.status==='building'||cabinet.status==='paused';
 const clock=(ms:number)=>{const seconds=Math.floor(Math.max(0,ms)/1000);return `${Math.floor(seconds/3600)}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;};
+const particleHeights=[22,63,39,78,52,29,70,44];
+const referenceTrackWidth=260;
+
+function StationSpeedTrack({fill,particleSeconds,label}:{fill:number;particleSeconds:number;label:string}){
+ const track=useRef<HTMLDivElement>(null);
+ const [trackWidth,setTrackWidth]=useState(referenceTrackWidth);
+ useLayoutEffect(()=>{
+  const element=track.current;if(!element)return;
+  const measure=()=>{const width=Math.round(element.getBoundingClientRect().width);if(width>0)setTrackWidth(previous=>previous===width?previous:width);};
+  measure();
+  const observer=new ResizeObserver(measure);observer.observe(element);
+  return()=>observer.disconnect();
+ },[]);
+ // Keep pixels traveled per second consistent when the same station is shown in a wider card.
+ const travelSeconds=particleSeconds*trackWidth/referenceTrackWidth;
+ return <div ref={track} className="build-station-speed-track" role="img" aria-label={label} style={{'--particle-duration':`${travelSeconds}s`} as CSSProperties}><span className={`build-station-speed-fill${fill>0?' has-speed-history':''}`} style={{width:fill+'%'}}>{fill>0&&<span className="build-speed-particles" aria-hidden="true">{particleHeights.map((top,index)=><i key={index} style={{top:`${top}%`,'--particle-delay':`${-index*travelSeconds/particleHeights.length}s`} as CSSProperties}/>)}</span>}</span></div>;
+}
 
 export function BuildStations({stations,cabinets,nowMs,desiredPaceMs,onStation,actions,layout=defaultDepartmentLayout}:{stations:BuildStation[];cabinets:FloorCabinet[];nowMs:number;desiredPaceMs?:number;onStation?:(id:string)=>void;actions?:ReactNode;layout?:DepartmentLayout}){
  const timerStations=stations.filter(s=>s.timerOnly||s.cabinet).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})||a.id.localeCompare(b.id));
@@ -82,7 +99,7 @@ export function BuildStations({stations,cabinets,nowMs,desiredPaceMs,onStation,a
    <div className="build-station-top"><div><span className="build-station-number">BUILD STATION {String(index+1).padStart(2,'0')}</span><h4>{operator||'No operator assigned'}</h4></div>{onStation&&<button className="build-station-open" onClick={()=>onStation(station.id)} aria-label={'Open '+station.name} title="Open workstation"><ArrowUpRight size={18}/></button>}</div>
    <div className={'build-station-health '+speed.status} aria-label={healthLabel}>{offline?<PowerOff size={15}/>:<Gauge size={15}/>}<span className="station-health-full">{healthLabel}</span><span className="station-health-short">{offline?'Offline':speed.status==='good'?'Within pace':speed.status==='slow'?'Slower pace':'No history'}</span></div>
    <div className="build-station-speed"><div><span>AVG. BUILD TIME</span><strong>{total>0?stationDuration(station.cabinet?.averageBuildMs):'\u2014'}</strong></div><div className="build-station-desired"><span>DESIRED PACE</span><strong>{stationDuration(pace)}</strong><small>per cabinet</small></div></div>
-   <div className="build-station-speed-track" role="img" aria-label={`Build speed: ${total?stationDuration(station.cabinet?.averageBuildMs):'unavailable'} average build time; desired pace ${stationDuration(pace)} per cabinet. Faster builds fill more of the meter.`} style={{'--particle-duration':`${particleSeconds}s`} as CSSProperties}><span className={`build-station-speed-fill${fill>0?' has-speed-history':''}`} style={{width:fill+'%'}}>{fill>0&&<span className="build-speed-particles" aria-hidden="true">{[22,63,39,78,52,29,70,44].map((top,index)=><i key={index} style={{top:`${top}%`,'--particle-delay':`${-index*particleSeconds/8}s`} as CSSProperties}/>)}</span>}</span></div>
+   <StationSpeedTrack fill={fill} particleSeconds={particleSeconds} label={`Build speed: ${total?stationDuration(station.cabinet?.averageBuildMs):'unavailable'} average build time; desired pace ${stationDuration(pace)} per cabinet. Faster builds fill more of the meter.`}/>
    <div className="build-station-speed-caption"><span>{stationSpeedLabel(speed)}</span><span>Faster →</span></div>
    <div className="build-station-current"><div className="build-station-state">{state==='building'?<HardHat size={19}/>:state==='paused'?<Pause size={18}/>:offline||state==='stale'?<WifiOff size={18}/>:<Clock3 size={18}/>}<div><strong>{starting?'Cabinet started':stateLabel}</strong><small>{offline?(station.devices?'Waiting for connection':'No device connected'):current.length>1?`${current.length} cabinets in progress`:current[0]?`Cabinet #${current[0].number}`:'Station stays visible between builds'}</small></div></div><div className="build-station-current-time"><span>{offline?'LAST BUILD TIME':'BUILD TIME'}</span><strong key={starting?.id??'current'}>{current.length?clock(currentMs):'\u2014'}</strong></div></div>
    <div className="build-station-footer"><span><CheckCircle2 size={15}/> Cabinets completed</span><strong>{total}</strong></div>
