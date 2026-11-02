@@ -1,6 +1,7 @@
 export type CabinetSample = {
   id: bigint; deviceId: string; bootId: string; uptimeMs: bigint;
   occurredAt: Date | null; receivedAt: Date; data: any;
+  job?:string; product?:string;
 };
 export type CabinetRecord = {
   id: string; number: number; deviceId: string; startedAt: string | null; finishedAt: string | null;
@@ -8,6 +9,7 @@ export type CabinetRecord = {
   lastReportedAt: string; stale: boolean;
   operatorId?:string|null;operatorName?:string|null;completedById?:string|null;completedByName?:string|null;
   stationName?:string;stationId?:string;
+  job?:string;product?:string;
 };
 
 // Samples must be accepted measurements in ingestion order. Repeated snapshots update
@@ -37,6 +39,7 @@ export function cabinetRecords(rows: CabinetSample[], start: Date, end: Date, no
       }
       records.set(key, {
         id: key, number: 0, deviceId: row.deviceId,
+        job:old?.job??row.job,product:old?.product??row.product,
         startedAt: old?.startedAt ?? time(row, c.startedUptimeMs),
         finishedAt: c.finishedUptimeMs === null ? null : time(row, c.finishedUptimeMs),
         durationMs: c.elapsedMs,
@@ -62,7 +65,7 @@ export function cabinetRecords(rows: CabinetSample[], start: Date, end: Date, no
         }
       } else if (data.detected) {
         key = `${row.deviceId}:${row.bootId}:legacy-${row.id}`;
-        records.set(key, {id:key,number:0,deviceId:row.deviceId,startedAt:row.occurredAt?.toISOString()??null,finishedAt:null,durationMs:0,status:'building',lastReportedAt:(row.occurredAt??row.receivedAt).toISOString(),stale:true});
+        records.set(key, {id:key,number:0,deviceId:row.deviceId,job:row.job,product:row.product,startedAt:row.occurredAt?.toISOString()??null,finishedAt:null,durationMs:0,status:'building',lastReportedAt:(row.occurredAt??row.receivedAt).toISOString(),stale:true});
         legacy.set(row.deviceId, {key,boot:row.bootId,counter:data.counterId,total:Number(data.totalDetectedMs)});
       }
     }

@@ -10,6 +10,7 @@ model Organization {
   name String
   timezone String @default("America/Denver")
   demo Boolean @default(false)
+  themeMode String @default("dark")
   Shop_orgIdRows Shop[] @relation("Shop_orgId")
   Area_orgIdRows Area[] @relation("Area_orgId")
   Workstation_orgIdRows Workstation[] @relation("Workstation_orgId")
@@ -21,6 +22,10 @@ model Organization {
   Measurement_orgIdRows Measurement[] @relation("Measurement_orgId")
   Note_orgIdRows Note[] @relation("Note_orgId")
   OperatorAssignment_orgIdRows OperatorAssignment[] @relation("OperatorAssignment_orgId")
+  AreaPaceRevision_orgIdRows AreaPaceRevision[] @relation("AreaPaceRevision_orgId")
+  ShiftScheduleRevision_orgIdRows ShiftScheduleRevision[] @relation("ShiftScheduleRevision_orgId")
+  ImprovementAction_orgIdRows ImprovementAction[] @relation("ImprovementAction_orgId")
+  TeamWin_orgIdRows TeamWin[] @relation("TeamWin_orgId")
 }
 model Shop {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -44,6 +49,9 @@ model Area {
   shopIdRef Shop @relation("Area_shopId", fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   Workstation_areaIdRows Workstation[] @relation("Workstation_areaId")
   User_areaIdRows User[] @relation("User_areaId")
+  AreaPaceRevision_areaIdRows AreaPaceRevision[] @relation("AreaPaceRevision_areaId")
+  ImprovementAction_areaIdRows ImprovementAction[] @relation("ImprovementAction_areaId")
+  TeamWin_areaIdRows TeamWin[] @relation("TeamWin_areaId")
 }
 model Workstation {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -66,6 +74,7 @@ model Workstation {
   Note_workstationIdRows Note[] @relation("Note_workstationId")
   User_workstationIdRows User[] @relation("User_workstationId")
   OperatorAssignment_workstationIdRows OperatorAssignment[] @relation("OperatorAssignment_workstationId")
+  ImprovementAction_workstationIdRows ImprovementAction[] @relation("ImprovementAction_workstationId")
 }
 model Shift {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -77,6 +86,66 @@ model Shift {
   ShiftDaySchedule_shiftIdRows ShiftDaySchedule[] @relation("ShiftDaySchedule_shiftId")
   @@index([orgId])
   orgIdRef Organization @relation("Shift_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  ShiftScheduleRevision_shiftIdRows ShiftScheduleRevision[] @relation("ShiftScheduleRevision_shiftId")
+}
+model AreaPaceRevision {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  areaId String @db.VarChar(36)
+  paceMs Int
+  effectiveAt DateTime @default(now()) @db.DateTime(3)
+  @@index([orgId, areaId, effectiveAt])
+  orgIdRef Organization @relation("AreaPaceRevision_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  areaIdRef Area @relation("AreaPaceRevision_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model ShiftScheduleRevision {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  shiftId String @db.VarChar(36)
+  scope String
+  date String? @db.VarChar(10)
+  startMinute Int
+  endMinute Int
+  breaks Json
+  effectiveAt DateTime @default(now()) @db.DateTime(3)
+  @@index([orgId, shiftId, effectiveAt])
+  @@index([shiftId, date])
+  orgIdRef Organization @relation("ShiftScheduleRevision_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  shiftIdRef Shift @relation("ShiftScheduleRevision_shiftId", fields: [shiftId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model ImprovementAction {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  areaId String @db.VarChar(36)
+  workstationId String @db.VarChar(36)
+  reason String
+  description String @db.Text
+  nextStep String @db.Text
+  owner String
+  status String @default("open")
+  outcome String? @db.Text
+  dueDate String? @db.VarChar(10)
+  createdBy String
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  closedAt DateTime? @db.DateTime(3)
+  @@index([orgId, areaId, status, createdAt])
+  @@index([workstationId, createdAt])
+  orgIdRef Organization @relation("ImprovementAction_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  areaIdRef Area @relation("ImprovementAction_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workstationIdRef Workstation @relation("ImprovementAction_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+model TeamWin {
+  id String @id @default(uuid()) @db.VarChar(36)
+  orgId String @db.VarChar(36)
+  areaId String @db.VarChar(36)
+  title String
+  detail String @db.Text
+  active Boolean @default(true)
+  createdBy String
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([orgId, areaId, active, createdAt])
+  orgIdRef Organization @relation("TeamWin_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  areaIdRef Area @relation("TeamWin_areaId", fields: [areaId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 model ShiftDaySchedule {
   id String @id @default(uuid()) @db.VarChar(36)
@@ -194,6 +263,7 @@ model RawEvent {
   @@index([orgId, workstationId, receivedAt])
   @@index([deviceId, id])
   @@index([deviceId, workstationId, type, occurredAt, receivedAt], map: "RawEvent_cabinet_receipt_idx")
+  @@index([orgId, workstationId, type, occurredAt], map: "RawEvent_improvement_history_idx")
   orgIdRef Organization @relation("RawEvent_orgId", fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   deviceIdRef Device @relation("RawEvent_deviceId", fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   workstationIdRef Workstation? @relation("RawEvent_workstationId", fields: [workstationId], references: [id], onDelete: Restrict, onUpdate: Cascade)

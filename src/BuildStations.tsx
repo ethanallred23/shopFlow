@@ -3,7 +3,7 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {CSSProperties,ReactNode} from 'react';
 import type {FloorCabinet} from './ActiveCabinets';
 import {visibleBuildMs} from './live-build-time';
-import {buildStationSpeed,stationDuration,stationSpeedLabel,stationHealthHue} from './build-station-speed';
+import {buildStationSpeed,stationDuration,stationSpeedLabel,stationHealthHue,stationSpeedMeter} from './build-station-speed';
 import {defaultDepartmentLayout,stationColumnCount} from './department-layout';
 import type {DepartmentLayout} from './department-layout';
 import {newStationBuilds} from './station-build-starts';
@@ -67,10 +67,11 @@ export function BuildStations({stations,cabinets,nowMs,desiredPaceMs,onStation,a
   return {station,current,pace,total,speed,state};
  });
  const building=data.filter(row=>row.state==='building').length,slower=data.filter(row=>row.speed.status==='slow').length,disconnected=data.filter(row=>row.state==='offline').length;
- return <section className="build-stations" data-density={layout.density} aria-label="Build stations"><div className="build-stations-heading"><div><span className="build-kicker">ON THE FLOOR</span><h3>Build stations <span>{data.length}</span></h3><p>Average build time compared with the desired pace. Lower time is faster.</p></div><div className="section-heading-actions"><span className="build-stations-count">{building} building{disconnected?` / ${disconnected} offline`:''}{slower?` · ${slower} slower than pace`:''}</span>{actions}</div></div><div ref={grid} className="build-stations-grid" style={{gridTemplateColumns:`repeat(${stationColumnCount(gridWidth,data.length,layout)},minmax(0,1fr))`}}>{data.map(({station,current,pace,total,speed,state},index)=>{
+ return <section className="build-stations" data-density={layout.density} aria-label="Build stations"><div className="build-stations-heading"><div><span className="build-kicker">ON THE FLOOR</span><h3>Build stations <span>{data.length}</span></h3><p>Build speed compared with desired pace. Faster builds fill more of the meter.</p></div><div className="section-heading-actions"><span className="build-stations-count">{building} building{disconnected?` / ${disconnected} offline`:''}{slower?` · ${slower} slower than pace`:''}</span>{actions}</div></div><div ref={grid} className="build-stations-grid" style={{gridTemplateColumns:`repeat(${stationColumnCount(gridWidth,data.length,layout)},minmax(0,1fr))`}}>{data.map(({station,current,pace,total,speed,state},index)=>{
   const offline=state==='offline';
   const finished=offline?undefined:completed.get(station.id),starting=offline?undefined:started.get(station.id)?.cabinet,currentMs=current.reduce((sum,c)=>sum+visibleBuildMs({...c,stale:c.stale||offline||state==='stale'},nowMs),0);
-  const scale=Math.max(1.25,(speed.ratio??0)*1.15),marker=100/scale,fill=speed.ratio===null?0:Math.min(100,speed.ratio/scale*100);
+  const fill=stationSpeedMeter(speed.ratio);
+  const particleSeconds=Math.max(.55,Math.min(3,(speed.ratio??1)*1.4));
   const operator=station.people?.[0]?.name||current[0]?.operatorName;
   const hue=stationHealthHue(speed.ratio);
   const healthLabel=offline?'Station offline':speed.status==='good'?'Within desired pace':speed.status==='slow'?'Slower than desired pace':'Waiting for build history';
@@ -81,8 +82,8 @@ export function BuildStations({stations,cabinets,nowMs,desiredPaceMs,onStation,a
    <div className="build-station-top"><div><span className="build-station-number">BUILD STATION {String(index+1).padStart(2,'0')}</span><h4>{operator||'No operator assigned'}</h4></div>{onStation&&<button className="build-station-open" onClick={()=>onStation(station.id)} aria-label={'Open '+station.name} title="Open workstation"><ArrowUpRight size={18}/></button>}</div>
    <div className={'build-station-health '+speed.status} aria-label={healthLabel}>{offline?<PowerOff size={15}/>:<Gauge size={15}/>}<span className="station-health-full">{healthLabel}</span><span className="station-health-short">{offline?'Offline':speed.status==='good'?'Within pace':speed.status==='slow'?'Slower pace':'No history'}</span></div>
    <div className="build-station-speed"><div><span>AVG. BUILD TIME</span><strong>{total>0?stationDuration(station.cabinet?.averageBuildMs):'\u2014'}</strong></div><div className="build-station-desired"><span>DESIRED PACE</span><strong>{stationDuration(pace)}</strong><small>per cabinet</small></div></div>
-   <div className="build-station-speed-track" role="img" aria-label={`Average build time ${total?stationDuration(station.cabinet?.averageBuildMs):'unavailable'}; desired ${stationDuration(pace)} per cabinet`}><span style={{width:fill+'%'}}/><i style={{left:marker+'%'}}/></div>
-   <div className="build-station-speed-caption"><span>{stationSpeedLabel(speed)}</span><span>Desired <i/></span></div>
+   <div className="build-station-speed-track" role="img" aria-label={`Build speed: ${total?stationDuration(station.cabinet?.averageBuildMs):'unavailable'} average build time; desired pace ${stationDuration(pace)} per cabinet. Faster builds fill more of the meter.`} style={{'--particle-duration':`${particleSeconds}s`} as CSSProperties}><span className={`build-station-speed-fill${fill>0?' has-speed-history':''}`} style={{width:fill+'%'}}>{fill>0&&<span className="build-speed-particles" aria-hidden="true">{[22,63,39,78,52,29,70,44].map((top,index)=><i key={index} style={{top:`${top}%`,'--particle-delay':`${-index*particleSeconds/8}s`} as CSSProperties}/>)}</span>}</span></div>
+   <div className="build-station-speed-caption"><span>{stationSpeedLabel(speed)}</span><span>Faster →</span></div>
    <div className="build-station-current"><div className="build-station-state">{state==='building'?<HardHat size={19}/>:state==='paused'?<Pause size={18}/>:offline||state==='stale'?<WifiOff size={18}/>:<Clock3 size={18}/>}<div><strong>{starting?'Cabinet started':stateLabel}</strong><small>{offline?(station.devices?'Waiting for connection':'No device connected'):current.length>1?`${current.length} cabinets in progress`:current[0]?`Cabinet #${current[0].number}`:'Station stays visible between builds'}</small></div></div><div className="build-station-current-time"><span>{offline?'LAST BUILD TIME':'BUILD TIME'}</span><strong key={starting?.id??'current'}>{current.length?clock(currentMs):'\u2014'}</strong></div></div>
    <div className="build-station-footer"><span><CheckCircle2 size={15}/> Cabinets completed</span><strong>{total}</strong></div>
    {finished&&<div className="build-station-completion" role="status"><CheckCircle2 size={20}/><span>Cabinet #{finished.number} complete</span></div>}

@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -16,6 +16,7 @@ import {cabinetProgress} from './cabinet-progress';
 import {heartbeatPace} from './heartbeat-pace';
 import {expireCommands,acknowledgeCommand} from './commands';
 import {changePerson} from './operators';
+import {retuneLocalCabinetSimulation} from './local-cabinet-simulation';
 export const app=express();
 const log=pino(); const updates=new EventEmitter();updates.setMaxListeners(1000);
 app.disable('x-powered-by');
@@ -30,9 +31,9 @@ app.use((req,res,next)=>{
   res.on('close',()=>{if(!res.writableFinished)log.warn({method:req.method,path:req.path,ms:Math.round(performance.now()-start)},'request disconnected before response');});
   next();
 });
-app.use('/api',rateLimit({windowMs:60000,limit:600,standardHeaders:'draft-7',legacyHeaders:false}));
+app.use('/api',rateLimit({windowMs:60000,limit:600,standardHeaders:'draft-7',legacyHeaders:false,handler:(_req,res)=>res.status(429).json({error:'Too many requests. Please wait a minute and try again.'})}));
 const cookie={httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict' as const,path:'/',maxAge:8*3600000};
-app.post('/api/login',rateLimit({windowMs:900000,limit:20}),asyncRoute(async(req,res)=>{
+app.post('/api/login',rateLimit({windowMs:900000,limit:20,handler:(_req,res)=>res.status(429).json({error:'Too many sign-in attempts. Please wait 15 minutes and try again.'})}),asyncRoute(async(req,res)=>{
   if(req.headers.origin!==process.env.APP_ORIGIN)throw new HttpError(403,'Invalid request origin');
   const {email,password}=z.object({email:z.string().email(),password:z.string().min(1).max(128)}).parse(req.body);
   const user=await db.user.findUnique({where:{email:email.toLowerCase()}});
@@ -118,12 +119,17 @@ app.patch('/api/departments/:id/target',role('supervisor'),asyncRoute(async(req,
 app.patch('/api/departments/:id/pace',role('supervisor'),asyncRoute(async(req,res)=>{
   await owned('area',req.params.id,req.auth!.orgId);
   const {paceMinutes}=z.object({paceMinutes:z.number().int().min(1).max(240)}).strict().parse(req.body);
-  const area=await db.area.update({where:{id:req.params.id},data:{cabinetPaceMs:paceMinutes*60000}});
+  const area=await db.$transaction(async tx=>{
+    const updated=await tx.area.update({where:{id:req.params.id},data:{cabinetPaceMs:paceMinutes*60000}});
+    await tx.areaPaceRevision.create({data:{orgId:req.auth!.orgId,areaId:updated.id,paceMs:updated.cabinetPaceMs}});
+    return updated;
+  });
+  retuneLocalCabinetSimulation(area.id,area.cabinetPaceMs);
   updates.emit(req.auth!.orgId);res.json(area);
 }));
 app.patch('/api/departments/:id',role('admin'),asyncRoute(async(req,res)=>{
   await owned('area',req.params.id,req.auth!.orgId);
-  const data=z.object({name:z.string().trim().min(1).max(100).optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color').optional(),themeMode:z.enum(['light','dark']).optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
+  const data=z.object({name:z.string().trim().min(1).max(100).optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/,'Choose a valid color').optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
   const area=await db.area.update({where:{id:req.params.id},data});
   updates.emit(req.auth!.orgId);res.json(area);
 }));
@@ -131,6 +137,10 @@ app.get('/api/workstations/:id/people',role('supervisor'),asyncRoute(async(req,r
   const station=await owned('workstation',req.params.id,req.auth!.orgId);
   const people=await db.user.findMany({where:{orgId:req.auth!.orgId,areaId:station.areaId},select:{id:true,name:true,workstationId:true},orderBy:{name:'asc'}});
   res.json(people);
+}));
+app.get('/api/departments/:id/people',role('supervisor'),asyncRoute(async(req,res)=>{
+  await owned('area',req.params.id,req.auth!.orgId);
+  res.json(await db.user.findMany({where:{orgId:req.auth!.orgId,areaId:req.params.id},select:{id:true,name:true,email:true,role:true,workstationId:true},orderBy:{name:'asc'}}));
 }));
 app.put('/api/workstations/:id/people/:userId',role('supervisor'),asyncRoute(async(req,res)=>{
   const station=await owned('workstation',req.params.id,req.auth!.orgId);
@@ -162,10 +172,18 @@ app.put('/api/dev/workstations/:id/cabinets/progress',role('admin'),asyncRoute(a
   updates.emit(req.auth!.orgId);res.json({ok:true,completed});
 }));
 app.post('/api/workstations/:id/notes',role('supervisor'),asyncRoute(async(req,res)=>{await owned('workstation',req.params.id,req.auth!.orgId);const data=z.object({text:z.string().min(1).max(2000),reason:z.enum(['Material shortage','Changeover','Maintenance','Quality check','Other']).nullable(),minutes:z.number().int().min(0).max(1440).nullable()}).parse(req.body);res.json(await db.note.create({data:{...data,orgId:req.auth!.orgId,workstationId:req.params.id,author:req.auth!.name}}));updates.emit(req.auth!.orgId);}));
-app.get('/api/reports.csv',asyncRoute(async(req,res)=>{const data=await dashboard(req.auth!.orgId,req.query);const escape=(s:unknown)=>'"'+String(s??'Unavailable').replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"','""')+'"';res.set({'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="shopflow-report.csv"'}).send([['Date','Period','Workstation','Product filter','Recorded output','Scheduled target','Expected so far','Median cycle ms','P90 cycle ms','Data status'],...data.stations.map(s=>[data.date,req.query.period==='day'?'Calendar day':data.shifts.find(x=>x.id===data.shiftId)?.name,s.name,req.query.product??'All',s.count,s.target,s.expected,s.median,s.p90,s.status])].map(row=>row.map(escape).join(',')).join('\r\n'));}));
+app.get('/api/reports.csv',asyncRoute(async(req,res)=>{const data=await dashboard(req.auth!.orgId,req.query);const escape=(s:unknown)=>'"'+String(s??'Unavailable').replace(/^[=+@\-\t\r]/,"'$&").replaceAll('"','""')+'"';res.set({'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="shopflow-report.csv"'}).send([['Date','Period','Workstation','Product filter','Output unit','Recorded output','Scheduled target','Expected so far','Median cycle ms','P90 cycle ms','Data status'],...data.stations.map(s=>[data.date,req.query.period==='day'?'Calendar day':data.shifts.find(x=>x.id===data.shiftId)?.name,s.name,req.query.product??'All',s.timerOnly?'cabinets':'parts',s.timerOnly?s.cabinet?.completed:s.count,s.target,s.expected,s.median,s.p90,s.status])].map(row=>row.map(escape).join(',')).join('\r\n'));}));
 app.get('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const [users,workstations]=await Promise.all([db.user.findMany({where:{orgId:req.auth!.orgId},select:{id:true,email:true,name:true,role:true,areaId:true,workstationId:true}}),db.workstation.findMany({where:{orgId:req.auth!.orgId},select:{id:true,name:true,areaId:true},orderBy:{name:'asc'}})]);res.json({users,workstations});}));
-app.patch('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const {timezone}=z.object({timezone:z.string().refine(v=>DateTime.now().setZone(v).isValid,'Invalid timezone')}).parse(req.body);res.json(await db.organization.update({where:{id:req.auth!.orgId},data:{timezone}}));}));
-app.post('/api/settings/users',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({name:z.string().min(1).max(100),email:z.string().email(),password:z.string().min(12).max(128),role:z.enum(['admin','supervisor','viewer']),areaId:z.string().uuid().nullable().optional()}).strict().parse(req.body);if(data.areaId)await owned('area',data.areaId,req.auth!.orgId);const {password,...rest}=data;const user=await db.user.create({data:{...rest,email:rest.email.toLowerCase(),orgId:req.auth!.orgId,passwordHash:await bcrypt.hash(password,12)}});res.json({id:user.id});}));
+app.patch('/api/settings',role('admin'),asyncRoute(async(req,res)=>{const data=z.object({timezone:z.string().refine(v=>DateTime.now().setZone(v).isValid,'Invalid timezone').optional(),themeMode:z.enum(['light','dark']).optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);const org=await db.organization.update({where:{id:req.auth!.orgId},data});updates.emit(req.auth!.orgId);res.json(org);}));
+app.post('/api/settings/users',role('admin'),asyncRoute(async(req,res)=>{
+  const data=z.object({name:z.string().trim().min(1).max(100),email:z.string().trim().email(),password:z.string().min(12).max(128),role:z.enum(['admin','supervisor','viewer']),areaId:z.string().uuid().nullable().optional(),workstationId:z.string().uuid().nullable().optional()}).strict().parse(req.body);
+  if(data.areaId)await owned('area',data.areaId,req.auth!.orgId);
+  if(data.workstationId){const station=await owned('workstation',data.workstationId,req.auth!.orgId);if(station.areaId!==data.areaId)throw new HttpError(400,'Workstation must be in the selected department');}
+  const {password,workstationId,...rest}=data;
+  const user=await db.user.create({data:{...rest,email:rest.email.toLowerCase(),orgId:req.auth!.orgId,passwordHash:await bcrypt.hash(password,12)}});
+  if(workstationId)try{await changePerson(req.auth!.orgId,user.id,{workstationId});}catch(error){await db.user.delete({where:{id:user.id}});throw error;}
+  updates.emit(req.auth!.orgId);res.json({id:user.id});
+}));
 app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   const data=z.object({role:z.enum(['admin','supervisor','viewer']).optional(),areaId:z.string().uuid().nullable().optional(),workstationId:z.string().uuid().nullable().optional()}).strict().refine(v=>Object.keys(v).length>0,'Provide a change').parse(req.body);
   if(data.role!==undefined&&req.params.id===req.auth!.id)throw new HttpError(400,'Ask another administrator to change your role');
@@ -173,18 +191,17 @@ app.patch('/api/settings/users/:id',role('admin'),asyncRoute(async(req,res)=>{
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.post('/api/settings/structure',role('admin'),asyncRoute(async(req,res)=>{
- const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),paceMinutes:z.number().int().min(1).max(240).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),themeMode:z.enum(['light','dark']).optional()}).strict().parse(req.body);
+ const data=z.object({kind:z.enum(['area','workstation']),name:z.string().trim().min(1).max(100),parentId:z.string().uuid().optional(),dailyTarget:z.number().int().min(0).max(100000000).optional(),paceMinutes:z.number().int().min(1).max(240).optional(),themeColor:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional()}).strict().parse(req.body);
  const orgId=req.auth!.orgId;
  if(data.kind==='area'){
   const shop=await db.shop.upsert({where:{orgId},create:{orgId,name:'Quality Craft Wood Works'},update:{name:'Quality Craft Wood Works'}});
-  res.json(await db.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,cabinetPaceMs:(data.paceMinutes??10)*60000,themeColor:data.themeColor??'#287f83',themeMode:data.themeMode??'light'}}));
+  res.json(await db.$transaction(async tx=>{const area=await tx.area.create({data:{orgId,name:data.name,shopId:shop.id,dailyTarget:data.dailyTarget??0,cabinetPaceMs:(data.paceMinutes??10)*60000,themeColor:data.themeColor??'#287f83'}});await tx.areaPaceRevision.create({data:{orgId,areaId:area.id,paceMs:area.cabinetPaceMs}});return area;}));
  }else{
   if(!data.parentId)throw new HttpError(400,'Choose a department');
   await owned('area',data.parentId,orgId);
   if(data.dailyTarget!==undefined)throw new HttpError(400,'Set the goal on the department');
   if(data.paceMinutes!==undefined)throw new HttpError(400,'Set the cabinet pace on the department');
   if(data.themeColor!==undefined)throw new HttpError(400,'Set the theme color on the department');
-  if(data.themeMode!==undefined)throw new HttpError(400,'Set the theme mode on the department');
   res.json(await db.workstation.create({data:{orgId,name:data.name,areaId:data.parentId,target:0}}));
  }
  updates.emit(orgId);
@@ -193,7 +210,9 @@ app.post('/api/settings/shifts',role('admin'),asyncRoute(async(req,res)=>{
   const data=z.object({id:z.string().uuid().optional(),name:z.string().min(1).max(100),startMinute:z.number().int().min(0).max(1439),endMinute:z.number().int().min(0).max(1439),breaks:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(1)})).max(20)}).parse(req.body);
   const length=(data.endMinute-data.startMinute+1440)%1440||1440;const sorted=[...data.breaks].sort((a,b)=>a.start-b.start);
   if(sorted.some((b,i)=>b.end<=b.start||b.end>length||(i>0&&b.start<sorted[i-1].end)))throw new HttpError(400,'Breaks must be within the shift and cannot overlap');
-  const {id,...values}=data;if(id){const result=await db.shift.updateMany({where:{id,orgId:req.auth!.orgId},data:values});if(!result.count)throw new HttpError(404,'Shift not found');res.json({ok:true});}else res.json(await db.shift.create({data:{...values,orgId:req.auth!.orgId}}));
+  const {id,...values}=data;
+  if(id){await db.$transaction(async tx=>{const result=await tx.shift.updateMany({where:{id,orgId:req.auth!.orgId},data:values});if(!result.count)throw new HttpError(404,'Shift not found');await tx.shiftScheduleRevision.create({data:{orgId:req.auth!.orgId,shiftId:id,scope:'daily',...values}});});res.json({ok:true});}
+  else res.json(await db.$transaction(async tx=>{const shift=await tx.shift.create({data:{...values,orgId:req.auth!.orgId}});await tx.shiftScheduleRevision.create({data:{orgId:req.auth!.orgId,shiftId:shift.id,scope:'daily',startMinute:shift.startMinute,endMinute:shift.endMinute,breaks:values.breaks}});return shift;}));
 }));
 app.post('/api/shifts/:id/schedule',role('supervisor'),asyncRoute(async(req,res)=>{
   const data=z.object({scope:z.enum(['date','daily']),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),startMinute:z.number().int().min(0).max(1439),endMinute:z.number().int().min(0).max(1439),breaks:z.array(z.object({start:z.number().int().min(0),end:z.number().int().min(1),label:z.string().trim().min(1).max(40).optional()}).strict()).max(20)}).strict().parse(req.body);
@@ -204,9 +223,11 @@ app.post('/api/shifts/:id/schedule',role('supervisor'),asyncRoute(async(req,res)
   const sorted=[...data.breaks].sort((a,b)=>a.start-b.start);
   if(sorted.some((b,i)=>b.end<=b.start||b.end>length||(i>0&&b.start<sorted[i-1].end)))throw new HttpError(400,'Breaks must fall within the shift and cannot overlap');
   const values={startMinute:data.startMinute,endMinute:data.endMinute,breaks:sorted};
-  if(data.scope==='daily'){
-    await db.$transaction(async tx=>{await tx.shift.update({where:{id:shift.id},data:values});await tx.shiftDaySchedule.deleteMany({where:{shiftId:shift.id,date:data.date}});});
-  }else await db.shiftDaySchedule.upsert({where:{shiftId_date:{shiftId:shift.id,date:data.date}},create:{...values,orgId:req.auth!.orgId,shiftId:shift.id,date:data.date},update:values});
+  await db.$transaction(async tx=>{
+    if(data.scope==='daily'){await tx.shift.update({where:{id:shift.id},data:values});await tx.shiftDaySchedule.deleteMany({where:{shiftId:shift.id,date:data.date}});}
+    else await tx.shiftDaySchedule.upsert({where:{shiftId_date:{shiftId:shift.id,date:data.date}},create:{...values,orgId:req.auth!.orgId,shiftId:shift.id,date:data.date},update:values});
+    await tx.shiftScheduleRevision.create({data:{orgId:req.auth!.orgId,shiftId:shift.id,scope:data.scope,date:data.scope==='date'?data.date:null,...values}});
+  });
   updates.emit(req.auth!.orgId);res.json({ok:true});
 }));
 app.use(express.static(resolve('dist')));app.get('*',(_req,res)=>res.sendFile(resolve('dist/index.html')));

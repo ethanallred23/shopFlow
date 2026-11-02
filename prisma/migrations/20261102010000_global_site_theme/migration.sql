@@ -1,0 +1,1 @@
+ALTER TABLE `Organization` ADD COLUMN `themeMode` VARCHAR(191) NOT NULL DEFAULT 'dark';

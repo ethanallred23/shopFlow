@@ -8,19 +8,7 @@ A production-flow application for Quality Craft Wood Works, operated by its CI T
 
 ## Local startup (PowerShell)
 
-Prerequisites: Node.js 22+, npm, and MySQL 8. This Windows workspace already has an initialized portable MySQL 8.0.45 database. Keep its existing `.local/mysql-data` directory; do not initialize it again. Start it with:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start-local-mysql.ps1
-```
-
-It listens only on `127.0.0.1:3307`; the database is `shopflow`. Starting this existing server does not require changing its passwords. In your existing `.env`, fill in **both** blank credential fields in:
-
-```dotenv
-DATABASE_URL=mysql://:@127.0.0.1:3307/shopflow
-```
-
-The completed format is `mysql://<URL-encoded username>:<URL-encoded password>@127.0.0.1:3307/shopflow`. Use credentials for an existing MySQL account with access to `shopflow`; percent-encode reserved characters in each credential (for example, `@` becomes `%40`). Prisma reads `DATABASE_URL` directly. Editing this URL does not create a MySQL account or change its password. Blank fields deliberately prevent connecting until you enter credentials; MySQL still requires its existing password.
+Prerequisites: Node.js 22+, npm, and MySQL 8. This workspace's `.env` points to the existing Laragon MySQL `shopflow` database at `127.0.0.1:3306`. Start MySQL in Laragon first, then run:
 
 ```powershell
 npm.cmd run db:migrate
@@ -28,11 +16,11 @@ npm.cmd run db:check
 npm.cmd run dev
 ```
 
-Restart the backend after changing `.env`. Do not reseed an existing database. `.env` and `.local/` are excluded from Git; preserve all your other `.env` settings.
+Open the app at `http://localhost:5173`. Restart the backend after changing `.env`. Do not reseed an existing database. `.env` and `.local/` are excluded from Git; preserve all your other `.env` settings.
 
 ### Alternative: a new installation with Docker Compose
 
-Use this only for a separate installation, not to replace this workspace's existing portable database. Compose uses a separate named volume and cannot run alongside portable MySQL on the same port. Install Docker Desktop with Compose first. Existing Docker volumes retain their existing credentials; changing environment variables does not reset accounts.
+Use this only for a separate installation. Compose uses a separate named volume and cannot run alongside Laragon MySQL on the same port. Install Docker Desktop with Compose first. Existing Docker volumes retain their existing credentials; changing environment variables does not reset accounts.
 
 ```powershell
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
@@ -66,6 +54,14 @@ npm.cmd run simulate -- normal
 ```
 
 Modes: `normal`, `slow`, `repeated`, `duplicate`, `restart`, `buffered`, `out-of-order`, `disconnect`. Stop with Ctrl+C. The simulator uses the real HTTP API, stable event IDs for retries, bounded request timeouts, periodic heartbeats and measured cycle events. The buffered scenario preserves original event timestamps.
+
+## First use in the app
+
+An administrator can start on **Departments** and follow **Get the floor ready**: create a department and workstations in Settings, add people in Settings or from the department page, then register and assign devices. The **Add person** form creates an account and can assign its workstation in the same step. A supervisor can open a department's **Department people** section to move existing operators between its stations. One operator can be assigned to each station; moving or replacing an operator updates assignment history.
+
+The **How to read this data** guide on Departments, Overview, and Reports explains recorded output, expected progress, shift targets, connection status, and missing measurements. Reports and CSV exports identify cabinet and part units separately. A missing measurement should not be interpreted as zero production or downtime.
+
+The **Site appearance** control in Settings switches the whole app between dark and light mode. Department colors remain accents. On build stations, a fuller speed meter means a faster average build. The desired pace is shown as a separate number beside the average build time, outside the bar. The meter uses a gradient matched to station health. Small particles flow right to left across the filled bar faster for quicker measured builds, fading in when a build starts and fading out when it stops. The effect respects reduced-motion settings. The cabinet log starts with the latest 20 entries and can expand to the whole shift.
 
 ## Build and tests
 

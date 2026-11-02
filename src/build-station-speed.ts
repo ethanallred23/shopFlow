@@ -25,6 +25,12 @@ export function stationDuration(ms:number|null|undefined){
 
 export function stationSpeedLabel(speed:ReturnType<typeof buildStationSpeed>){
  if(speed.differenceMs===null)return 'No completed builds yet';
- if(speed.differenceMs===0)return 'Matching desired pace';
- return `${stationDuration(Math.abs(speed.differenceMs))} ${speed.status==='slow'?'over':'under'} desired time`;
+ if(speed.differenceMs===0)return 'At target pace';
+ return `${stationDuration(Math.abs(speed.differenceMs))} ${speed.status==='slow'?'slower':'faster'} than target`;
+}
+
+// Desired pace sits at the midpoint. Faster builds fill farther to the right.
+export function stationSpeedMeter(ratio:number|null){
+ if(ratio===null||!Number.isFinite(ratio)||ratio<=0)return 0;
+ return Math.max(0,Math.min(100,50/ratio));
 }

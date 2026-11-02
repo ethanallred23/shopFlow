@@ -27,12 +27,21 @@
 .build-station-speed .build-station-desired strong{font-size:23px;letter-spacing:-.5px;color:#273c41}
 .build-station-desired small{margin-top:4px;color:#527169;font-size:10px}
 .build-station-speed-track{height:16px;border-radius:9px;background:#dce8e5;position:relative;margin-top:20px}
-.build-station-speed-track>span{display:block;height:100%;border-radius:9px;background:var(--speed-color);transition:width .4s ease}
-.build-station-speed-track>i{position:absolute;top:-5px;bottom:-5px;width:0;border-left:2px dashed #2a454d}
+.build-station-speed-track>span{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#61717a,#a9bbc1);transition:width .6s cubic-bezier(.22,.61,.36,1)}
+.build-station-speed-fill{position:relative;isolation:isolate;box-shadow:inset 0 0 7px #fff3,0 0 8px color-mix(in srgb,var(--speed-color) 28%,transparent)}
+.build-station-speed-fill::after{content:'';position:absolute;z-index:2;right:-2px;top:50%;width:17px;height:17px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff 0%,#f7fbff 42%,color-mix(in srgb,var(--speed-color) 24%,white) 100%);box-shadow:0 0 0 2px #ffffff55,0 0 9px 2px color-mix(in srgb,var(--speed-color) 55%,transparent);opacity:0;transform:translateY(-50%) scale(.65);transition:opacity .7s ease,transform .7s cubic-bezier(.22,.61,.36,1);pointer-events:none}
+.build-station-card.building[data-motion-ready="true"] .build-station-speed-fill.has-speed-history::after{opacity:1;transform:translateY(-50%) scale(1)}
+.build-speed-particles{position:absolute;inset:0;border-radius:inherit;overflow:hidden;opacity:0;transition:opacity .8s cubic-bezier(.22,.61,.36,1);pointer-events:none}
+.build-station-card.building[data-motion-ready="true"] .build-speed-particles{opacity:1}
+.build-speed-particles i{position:absolute;left:-6px;width:2px;height:2px;border-radius:50%;background:#fff;box-shadow:0 0 4px 1px #ffffffad;transform:translateY(-50%);opacity:0}
+.build-speed-particles i:nth-child(3n){width:2px;height:2px;box-shadow:0 0 4px #fff9}
+.build-speed-particles i:nth-child(4n){width:3px;height:3px}
+.build-station-card[data-motion-ready="true"] .build-speed-particles i{animation:build-speed-particle var(--particle-duration,1.2s) linear var(--particle-delay,0s) infinite}
+.build-station-card.building.speed-slow[data-motion-ready="true"] .build-speed-particles{opacity:.8}
+@keyframes build-speed-particle{0%{left:calc(100% + 3px);opacity:0}12%{opacity:.9}82%{opacity:.9}100%{left:-6px;opacity:0}}
 .build-station-speed-caption{display:flex;justify-content:space-between;align-items:start;gap:8px;min-height:33px;margin-top:10px;color:#3e6258;font-size:10px;line-height:1.4}
 .speed-slow .build-station-speed-caption>span:first-child{color:#aa291e;font-weight:700}
 .build-station-speed-caption>span:last-child{display:flex;align-items:center;gap:5px;white-space:nowrap}
-.build-station-speed-caption i{height:12px;border-left:2px dashed #2a454d}
 .build-station-current{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:81px;padding:16px 0;border-top:1px solid #a9cabb}
 .build-station-state{display:flex;align-items:center;gap:8px;min-width:0}
 .build-station-state>svg{flex:none;color:#25825c}
@@ -61,7 +70,6 @@
 .department-view.theme-dark .build-station-health.slow{background:#58271e;color:#ffb1a0}
 .department-view.theme-dark .speed-slow .build-station-speed-caption>span:first-child{color:#ff9d8e}
 .department-view.theme-dark .build-station-speed-track{background:#3b5553}
-.department-view.theme-dark .build-station-speed-track>i,.department-view.theme-dark .build-station-speed-caption i{border-color:#e1f3ed}
 .department-view.theme-dark .build-station-current,.department-view.theme-dark .build-station-footer{border-color:#44685b}
 .department-view.theme-dark .build-station-state>svg{color:#8fe0ae}
 .department-view.theme-dark .build-station-open{background:#203f35;border-color:#59816a;color:#d3efdf}
@@ -83,6 +91,7 @@
 .department-view .build-station-card.health-tinted .build-station-speed-caption>span:first-child{color:var(--speed-color)}
 .department-view .build-station-card.health-tinted :is(.build-station-current,.build-station-footer){border-color:var(--health-line)}
 .department-view .build-station-card.health-tinted .build-station-speed-track{background:hsl(var(--health-hue) 20% 86%)}
+.department-view .build-station-card.health-tinted .build-station-speed-fill{background:linear-gradient(90deg,hsl(var(--health-hue) 77% 37%) 0%,hsl(var(--health-hue) 80% 48%) 52%,hsl(var(--health-hue) 82% 60%) 100%)}
 .department-view .build-station-card.health-tinted .build-station-state>svg{color:var(--speed-color)}
 .department-view .build-station-card.health-tinted .build-station-open{background:var(--health-badge);border-color:var(--health-line);color:var(--health-ink)}
 .department-view .build-station-card.health-tinted .build-station-open:hover{filter:brightness(1.06)}
@@ -93,7 +102,7 @@
 .department-view .build-station-card.speed-unknown>.build-station-surface{background:linear-gradient(115deg,#f0f4f5,#dfe8ea,#f7f9fa);background-size:220% 220%;box-shadow:0 6px 24px #20373e16}
 .department-view.theme-dark .build-station-card.speed-unknown>.build-station-surface{background:linear-gradient(115deg,#20333c,#2c424b,#1d3038);background-size:220% 220%;box-shadow:0 6px 24px #0002}
 .department-view.theme-dark .build-station-card.speed-unknown>.build-station-surface::after{background:linear-gradient(90deg,transparent,#ffffff16,transparent)}
-@media(prefers-reduced-motion:reduce){.build-station-card{transition:none}}
+@media(prefers-reduced-motion:reduce){.build-station-card{transition:none}.build-station-speed-track .build-speed-particles{display:none}.build-station-speed-fill::after{transition:none;box-shadow:0 0 0 2px #ffffff55}}
 
 /* Keep the moving surface mounted so starting, pausing, and resuming can crossfade. */
 .build-station-card>.build-station-surface{position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity 1.1s cubic-bezier(.22,.61,.36,1);animation-play-state:paused}
@@ -117,5 +126,4 @@
 .department-view .build-station-card.offline .build-station-desired strong{color:inherit}
 .department-view .build-station-card.offline :is(.build-station-current,.build-station-footer){border-color:var(--offline-line)}
 .department-view .build-station-card.offline .build-station-speed-track{background:var(--offline-badge)}
-.department-view .build-station-card.offline :is(.build-station-speed-track>i,.build-station-speed-caption i){border-color:var(--offline-muted)}
 .department-view .build-station-card.offline>.build-station-surface{visibility:hidden;opacity:0;box-shadow:none}

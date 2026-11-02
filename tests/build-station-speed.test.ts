@@ -1,12 +1,12 @@
 import {expect,it} from 'vitest';
-import {buildStationSpeed,stationDuration,stationSpeedLabel,stationHealthHue} from '../src/build-station-speed';
+import {buildStationSpeed,stationDuration,stationSpeedLabel,stationHealthHue,stationSpeedMeter} from '../src/build-station-speed';
 
 it('compares average measured build time with desired time instead of cabinet counts',()=>{
  const fast=buildStationSpeed(270000,600000,24),slow=buildStationSpeed(630000,600000,24);
  expect(fast).toMatchObject({status:'good',ratio:.45,differenceMs:-330000});
  expect(slow).toMatchObject({status:'slow',ratio:1.05,differenceMs:30000});
- expect(stationSpeedLabel(fast)).toBe('5m 30s under desired time');
- expect(stationSpeedLabel(slow)).toBe('30s over desired time');
+ expect(stationSpeedLabel(fast)).toBe('5m 30s faster than target');
+ expect(stationSpeedLabel(slow)).toBe('30s slower than target');
  expect(buildStationSpeed(600000,600000,1).status).toBe('good');
 });
 it('blends continuously from green through yellow and orange to red as build time increases',()=>{
@@ -26,4 +26,11 @@ it('shows unknown speed until a completed cabinet and a valid pace exist',()=>{
  expect(buildStationSpeed(1000,undefined,1).status).toBe('unknown');
  expect(stationDuration(45000)).toBe('45s');
  expect(stationDuration(630000)).toBe('10m 30s');
+});
+it('fills the speed meter farther for faster builds, with desired pace at halfway',()=>{
+ expect(stationSpeedMeter(.4)).toBe(100);
+ expect(stationSpeedMeter(.6)).toBeCloseTo(83.33,1);
+ expect(stationSpeedMeter(1)).toBe(50);
+ expect(stationSpeedMeter(1.5)).toBeCloseTo(33.33,1);
+ expect(stationSpeedMeter(null)).toBe(0);
 });

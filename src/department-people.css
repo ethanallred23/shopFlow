@@ -1,0 +1,105 @@
+/* The roster sits outside DepartmentView and follows the site theme. */
+.app .department-people {
+  --people-bg: linear-gradient(125deg, color-mix(in srgb, var(--department-color) 11%, white), #fff 54%);
+  --people-card: #fff;
+  --people-border: color-mix(in srgb, var(--department-color) 28%, #dce5e4);
+  --people-text: #20343a;
+  --people-muted: #566d73;
+  --people-accent: color-mix(in srgb, var(--department-color) 40%, #17313a);
+  --people-field: #fff;
+  background: var(--people-bg);
+  border-color: var(--people-border);
+  color: var(--people-text);
+  padding: 17px 19px;
+  margin-bottom: 14px;
+}
+.app .department-people.theme-dark {
+  --people-bg: linear-gradient(125deg, color-mix(in srgb, var(--department-color) 19%, #172730), #172730 55%);
+  --people-card: #203640;
+  --people-border: color-mix(in srgb, var(--department-color) 28%, #48616a);
+  --people-text: #f1f7f6;
+  --people-muted: #bbd0d2;
+  --people-accent: color-mix(in srgb, var(--department-color) 42%, #c8f7e7);
+  --people-field: #152b34;
+}
+.app .department-people .panel-heading {
+  margin-bottom: 11px;
+  align-items: center;
+}
+.app .department-people .panel-heading > div {min-width: 0}
+.app .department-people h2 {
+  color: var(--people-text);
+  font-size: 16px;
+  margin: 0;
+}
+.app .department-people h2 svg {color: var(--people-accent)}
+.app .department-people .panel-heading p,
+.app .department-people .hint,
+.app .department-people .muted {color: var(--people-muted)}
+.app .department-people .panel-heading p {margin: 4px 0 0}
+.app .department-people .panel-heading button {
+  flex: none;
+  background: var(--people-card);
+  border-color: var(--people-border);
+  color: var(--people-text);
+  padding: 8px 11px;
+}
+.app .department-people .panel-heading button:hover {
+  border-color: var(--people-accent);
+  color: var(--people-accent);
+}
+.app .department-people details {
+  border-color: var(--people-border);
+  padding-top: 9px;
+}
+.app .department-people summary {color: var(--people-accent)}
+.app .department-people details > .hint {margin: 8px 0 12px}
+.app .department-people .people-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+.app .department-people .people-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--people-border);
+  border-radius: 9px;
+  background: var(--people-card);
+}
+.app .department-people .people-row strong {
+  color: var(--people-text);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.app .department-people .people-row small {
+  color: var(--people-muted);
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.app .department-people .people-row label {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  color: var(--people-muted);
+}
+.app .department-people .people-row select {
+  width: 100%;
+  padding: 8px 10px;
+  border-color: var(--people-border);
+  background: var(--people-field);
+  color: var(--people-text);
+}
+.app .department-people .empty {
+  min-height: 88px;
+  color: var(--people-muted);
+}
+@media(max-width:600px) {
+  .app .department-people {padding: 15px}
+  .app .department-people .panel-heading {align-items: flex-start}
+  .app .department-people .panel-heading button {white-space: nowrap}
+}

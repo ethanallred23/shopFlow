@@ -7,6 +7,8 @@ import {cabinetSimulationFrame,type SimulationTiming} from './cabinet-simulation
 const marker='LOCAL-CABINET-SIMULATION';
 type DeviceSimulation={deviceId:string;token:string;bootId:string;bootAt:number;liveAt:number;offset:number;
  sequence:number;lastStatus:string;lastSampleAt:number;timing:SimulationTiming};
+let retune:((areaId:string,paceMs:number)=>void)|null=null;
+export function retuneLocalCabinetSimulation(areaId:string,paceMs:number){retune?.(areaId,paceMs);}
 
 export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
  if(process.env.NODE_ENV!=='development')throw new Error('Local cabinet simulation requires NODE_ENV=development.');
@@ -65,11 +67,20 @@ export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
   }
   simulations.push(simulation);
  }
- let ticking=false,stopped=false;
+ let ticking=false,stopped=false,pendingPace:number|null=null;
+ retune=(changedAreaId,newPaceMs)=>{
+  if(stopped||changedAreaId!==area!.id)return;
+  pendingPace=newPaceMs;
+ };
  const tick=async()=>{
   if(ticking||stopped)return;
   ticking=true;
   try{
+   if(pendingPace!==null){
+    const station=simulations[3],now=Date.now();station.timing.buildMs=Math.round(pendingPace*1.5);
+    station.bootId=randomUUID();station.bootAt=now-Math.max(1800000,station.timing.buildMs*4+60000);
+    station.liveAt=now;station.offset=0;station.sequence=0;station.lastStatus='';station.lastSampleAt=0;pendingPace=null;
+   }
    const now=Date.now();let changed=false;
    for(const simulation of simulations){
     const frame=cabinetSimulationFrame(now-simulation.liveAt+simulation.offset,simulation.timing);
@@ -93,5 +104,5 @@ export async function startLocalCabinetSimulation(refresh:(orgId:string)=>void){
  const address=new URL(process.env.APP_ORIGIN??'http://127.0.0.1:5173');address.searchParams.set('department',area.id);
  console.log(`Local cabinet simulation: ${address.href}`);
  console.log('Four simulated workstations are building, pausing, and completing cabinets, including Taylor at 50% over the desired build time. Set LOCAL_CABINET_SIMULATION=0 and restart to stop.');
- return ()=>{stopped=true;clearInterval(interval);};
+ return ()=>{stopped=true;retune=null;clearInterval(interval);};
 }

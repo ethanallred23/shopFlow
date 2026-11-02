@@ -1,0 +1,27 @@
+/* Organization appearance applies to every page, including settings and reports. */
+.app.department-dark{color-scheme:dark}
+.app.department-dark .content .panel,.app.department-dark .content .metric,.app.department-dark .content .station-card,.app.department-dark .content .department-card,.app.department-dark .content .notice,.app.department-dark .content .structure,.app.department-dark .content .empty,.app.department-dark .dialog{background:#172730;border-color:#39515a;color:#edf5f5}
+.app.department-dark .content .department-card{background:linear-gradient(145deg,#1c3537,#172730)}
+.app.department-dark .content .department-card h2,.app.department-dark .content .department-card strong,.app.department-dark .content .panel h2,.app.department-dark .content .panel h3,.app.department-dark .content .metric-value,.app.department-dark .content .station-card h3,.app.department-dark .content .station-card strong,.app.department-dark .dialog h2{color:#f2f8f7}
+.app.department-dark .content p,.app.department-dark .content small,.app.department-dark .content .muted,.app.department-dark .content .hint,.app.department-dark .content label,.app.department-dark .dialog p,.app.department-dark .dialog label{color:#c2d2d4}
+.app.department-dark .content input,.app.department-dark .content select,.app.department-dark .content textarea,.app.department-dark .dialog input,.app.department-dark .dialog select,.app.department-dark .dialog textarea{background:#101e26;border-color:#527078;color:#f4faf9}
+.app.department-dark .content button:not(.primary),.app.department-dark .content .button,.app.department-dark .dialog button:not(.primary){background:#203942;border-color:#53717a;color:#e8f7f2}
+.app.department-dark .content button:not(.primary):hover,.app.department-dark .dialog button:not(.primary):hover{background:#2b4b51}
+.app.department-dark .content th,.app.department-dark .content td,.app.department-dark .content .setting-row,.app.department-dark .content .people-row{border-color:#3e5a62;color:#e2eeee}
+.app.department-dark .content .station-people{background:#17352f;border-color:#578470}
+.app.department-dark .content .station-people.unassigned{background:#382925;border-color:#d16c5f}
+.app.department-dark .content .assigned-person{background:#203b39;border-color:#567c70;color:#e8f5ee}
+.app.department-dark .content .station-people-warning strong{color:#ffb6a9}
+.app.department-dark .content .station-people-warning p{color:#e5b9b1}
+.app.department-dark .content .station-people-controls label,.app.department-dark .content .station-people-kicker{color:#bde5d1}
+.app.department-dark .content .station-people-controls small{color:#b9d2c8}
+.app.department-dark .content .status,.app.department-dark .content .demo{border-color:#44636a;color:#d8e9e6}
+.app.department-dark .content .status.online{background:#204d3e;color:#cef3d8}
+.app.department-dark .content .status.neutral{background:#34434b;color:#dce7e9}
+.app.department-dark .content .text-button{color:#a8e3d4}
+.app.department-dark .content .pace-status.unknown{background:#2b414b;color:#d7e4e6}
+.app.department-dark .content .data-guide{background:#19322e;border-color:#3b675a;color:#e5f4ed}
+.app.department-dark .content .data-guide p{color:#d4e8db}
+.app.department-dark .content .station-grid .station-card{box-shadow:0 7px 20px #0004}
+.app.department-dark .content .department-view.theme-dark .panel{background:#172730;border-color:#39515a}
+.app.department-dark .content .department-view.theme-dark .build-station-card.health-tinted{background:linear-gradient(120deg,hsl(var(--health-hue) 24% 18%),hsl(var(--health-hue) 20% 15%))}
